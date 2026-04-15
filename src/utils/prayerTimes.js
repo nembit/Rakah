@@ -117,9 +117,11 @@ export function calculatePrayerTimes(
 
   return {
     Fajr: { time: fajr, formatted: formatTime(fajr) },
+    Sunrise: { time: sunrise, formatted: formatTime(sunrise) },
     Dhuhr: { time: dhuhr, formatted: formatTime(dhuhr) },
     Asr: { time: asr, formatted: formatTime(asr) },
     Maghrib: { time: maghrib, formatted: formatTime(maghrib) },
+    Sunset: { time: sunset, formatted: formatTime(sunset) },
     Isha: { time: isha, formatted: formatTime(isha) },
   };
 }

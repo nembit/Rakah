@@ -123,6 +123,8 @@ src/
   components/          Shared UI components
   store/               Zustand stores
   utils/               Utilities + auth/upload helpers
+  lib/                 Fetch interceptor and polyfill setup
+lib/                   Error boundaries, logging, and runtime helpers
 polyfills/
   web/                 Web-specific shims
   native/              Native-specific overrides
@@ -175,7 +177,6 @@ Then upload the generated AAB in Google Play Console.
 
 ## Notes
 
-- This codebase was migrated away from Anything.com runtime coupling and now runs as a standalone Expo app.
 - Some platform polyfills and package patches are intentionally included for compatibility.
 
 ## License

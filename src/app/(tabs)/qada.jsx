@@ -43,6 +43,9 @@ const C = {
   gold: "#F59E0B",
   red: "#EF4444",
   teal: "#38BDF8",
+  brown: "#B07A3F",
+  qadaDarkBlue: "#ff8000",
+  qadaWarmYellow: "#E8C15A",
   text: "#F9FAFB",
   textSec: "#9CA3AF",
   textDim: "#4B5563",
@@ -57,6 +60,24 @@ const F = {
 };
 
 const PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+const RAKAH_PER_PRAYER = {
+  Fajr: 2,
+  Dhuhr: 4,
+  Asr: 4,
+  Maghrib: 3,
+  Isha: 4,
+};
+const EST_MIN_PER_RAKAH = 1.5;
+
+function formatDuration(minutes) {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const mins = safeMinutes % 60;
+
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
 
 function AnimatedCounter({ value }) {
   const displayVal = useSharedValue(value);
@@ -104,7 +125,7 @@ function AnimatedCounter({ value }) {
         style={{
           fontFamily: F.xbold,
           fontSize: 28,
-          color: C.text,
+          color: value === 0 ? C.accent : C.qadaWarmYellow,
           minWidth: 44,
           textAlign: "center",
         }}
@@ -392,6 +413,7 @@ function QadaCard({
 }) {
   const scaleInc = useSharedValue(1);
   const scaleDec = useSharedValue(1);
+  const rakahCount = count * (RAKAH_PER_PRAYER[prayer] || 0);
 
   const handleInc = () => {
     scaleInc.value = withSequence(
@@ -437,7 +459,7 @@ function QadaCard({
       <View
         style={{
           alignItems: "center",
-          marginBottom: 8,
+          marginBottom: 6,
         }}
       >
         <Text
@@ -477,7 +499,19 @@ function QadaCard({
           </TouchableOpacity>
         </Animated.View>
 
-        <AnimatedCounter value={count} />
+        <View style={{ alignItems: "center" }}>
+          <AnimatedCounter value={count} />
+          <Text
+            style={{
+              fontFamily: F.reg,
+              fontSize: 11,
+              color: C.textSec,
+              marginTop: -2,
+            }}
+          >
+            {rakahCount} rakah
+          </Text>
+        </View>
 
         {/* Right: Checkmark (decrement) button - green for positive action */}
         <Animated.View style={decStyle}>
@@ -525,22 +559,6 @@ function QadaCard({
         </TouchableOpacity>
       </View>
 
-      {count === 0 && (
-        <View style={{ marginTop: 4, alignItems: "center" }}>
-          <View
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-              backgroundColor: `${C.accent}15`,
-              borderRadius: 999,
-            }}
-          >
-            <Text style={{ fontFamily: F.semi, fontSize: 10, color: C.accent }}>
-              All caught up ✓
-            </Text>
-          </View>
-        </View>
-      )}
     </Animated.View>
   );
 }
@@ -556,6 +574,11 @@ export default function QadaScreen() {
   const [showLog, setShowLog] = useState(false);
 
   const totalQada = PRAYERS.reduce((sum, p) => sum + (qdaCounts[p] || 0), 0);
+  const totalRakah = PRAYERS.reduce(
+    (sum, p) => sum + (qdaCounts[p] || 0) * (RAKAH_PER_PRAYER[p] || 0),
+    0,
+  );
+  const estimatedTotalMinutes = totalRakah * EST_MIN_PER_RAKAH;
   const recentLog = qdaLog.slice(0, 20);
 
   return (
@@ -625,16 +648,74 @@ export default function QadaScreen() {
           >
             TOTAL QADA REMAINING
           </Text>
-          <Text
-            style={{
-              fontFamily: F.xbold,
-              fontSize: 52,
-              color: totalQada === 0 ? C.accent : C.teal,
-              letterSpacing: -2,
-            }}
-          >
-            {totalQada}
-          </Text>
+          <View style={{ alignItems: "center" }}>
+            <Text
+              style={{
+                fontFamily: F.xbold,
+                fontSize: 52,
+                color: C.qadaWarmYellow,
+                letterSpacing: -2,
+              }}
+            >
+              {totalQada}
+            </Text>
+            <Text
+              style={{
+                fontFamily: F.reg,
+                fontSize: 12,
+                color: C.textSec,
+                marginTop: -4,
+              }}
+            >
+              prayers
+            </Text>
+
+            <Text
+              style={{
+                fontFamily: F.bold,
+                fontSize: 28,
+                color: C.qadaDarkBlue,
+                marginTop: 8,
+              }}
+            >
+              {totalRakah}
+            </Text>
+            <Text
+              style={{
+                fontFamily: F.reg,
+                fontSize: 12,
+                color: C.textSec,
+                marginTop: -2,
+              }}
+            >
+              rakah
+            </Text>
+
+            {totalRakah > 0 && (
+              <Text
+                style={{
+                  fontFamily: F.reg,
+                  fontSize: 11,
+                  color: C.textSec,
+                  marginTop: 8,
+                }}
+              >
+                Est. prayer time: {formatDuration(estimatedTotalMinutes)}
+              </Text>
+            )}
+            {totalRakah > 0 && (
+              <Text
+                style={{
+                  fontFamily: F.reg,
+                  fontSize: 10,
+                  color: C.textDim,
+                  marginTop: 2,
+                }}
+              >
+                based on ~{EST_MIN_PER_RAKAH} min per rakah
+              </Text>
+            )}
+          </View>
           {totalQada === 0 && (
             <Text
               style={{
@@ -645,18 +726,6 @@ export default function QadaScreen() {
               }}
             >
               MashaAllah — no backlog!
-            </Text>
-          )}
-          {totalQada > 0 && (
-            <Text
-              style={{
-                fontFamily: F.reg,
-                fontSize: 13,
-                color: C.textSec,
-                marginTop: 4,
-              }}
-            >
-              prayers to make up
             </Text>
           )}
         </Animated.View>

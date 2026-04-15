@@ -96,6 +96,117 @@ const ENCOURAGEMENTS = [
   "You showed up. That matters. 🌿",
 ];
 
+function getCurrentPrayerInfo(prayerTimes, nowDate = new Date()) {
+  const order = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+  const schedule = order
+    .map((prayer) => ({ prayer, time: prayerTimes[prayer]?.time }))
+    .filter((item) => item.time !== null && item.time !== undefined && !isNaN(item.time));
+
+  if (!schedule.length) return null;
+
+  const nowHours =
+    nowDate.getHours() + nowDate.getMinutes() / 60 + nowDate.getSeconds() / 3600;
+
+  let current = schedule[schedule.length - 1];
+  for (const item of schedule) {
+    if (nowHours >= item.time) {
+      current = item;
+    } else {
+      break;
+    }
+  }
+
+  const next = schedule.find((item) => item.time > nowHours) || schedule[0];
+
+  const currentTimeValue = current.time;
+  const nextTimeValue = next.time;
+  const durationHours =
+    nextTimeValue > currentTimeValue
+      ? nextTimeValue - currentTimeValue
+      : 24 - currentTimeValue + nextTimeValue;
+  const elapsedHours =
+    nowHours >= currentTimeValue
+      ? nowHours - currentTimeValue
+      : 24 - currentTimeValue + nowHours;
+  const progressToNext =
+    durationHours > 0
+      ? Math.max(0, Math.min(1, elapsedHours / durationHours))
+      : 0;
+  const durationMinutes = Math.round(durationHours * 60);
+  const elapsedMinutes = Math.round(elapsedHours * 60);
+  const hoursLeftToNext = Math.max(0, durationHours - elapsedHours);
+  const minutesLeftToNext = Math.round(hoursLeftToNext * 60);
+
+  return {
+    currentPrayer: current.prayer,
+    currentTime: prayerTimes[current.prayer]?.formatted || "--:--",
+    nextPrayer: next.prayer,
+    nextTime: prayerTimes[next.prayer]?.formatted || "--:--",
+    progressToNext,
+    durationMinutes,
+    elapsedMinutes,
+    minutesLeftToNext,
+  };
+}
+
+function getAutoPrayerStatus(currentPrayerInfo) {
+  if (!currentPrayerInfo || !currentPrayerInfo.currentPrayer) return "on-time";
+
+  const prayer = currentPrayerInfo.currentPrayer;
+  const nowHours = currentPrayerInfo.nowHours;
+  const prayerTimes = currentPrayerInfo.prayerTimes || {};
+
+  if (typeof nowHours !== "number") return "on-time";
+
+  const start = prayerTimes[prayer]?.time;
+  if (typeof start !== "number") return "on-time";
+
+  const getLateTrigger = () => {
+    if (prayer === "Fajr") return prayerTimes.Sunrise?.time;
+    if (prayer === "Dhuhr") return prayerTimes.Asr?.time;
+    if (prayer === "Asr") return prayerTimes.Maghrib?.time;
+    if (prayer === "Maghrib") {
+      if (typeof prayerTimes.Isha?.time === "number") return prayerTimes.Isha.time;
+      if (typeof prayerTimes.Sunset?.time === "number") return prayerTimes.Sunset.time + 1.25;
+      return typeof prayerTimes.Maghrib?.time === "number"
+        ? prayerTimes.Maghrib.time + 1.25
+        : undefined;
+    }
+    if (prayer === "Isha") {
+      const sunset =
+        typeof prayerTimes.Sunset?.time === "number"
+          ? prayerTimes.Sunset.time
+          : prayerTimes.Maghrib?.time;
+      const fajr = prayerTimes.Fajr?.time;
+      if (typeof sunset !== "number" || typeof fajr !== "number") return undefined;
+      const nextFajr = fajr <= sunset ? fajr + 24 : fajr;
+      return sunset + (nextFajr - sunset) / 2;
+    }
+    return undefined;
+  };
+
+  const lateTrigger = getLateTrigger();
+  if (typeof lateTrigger !== "number") return "on-time";
+
+  let adjustedTrigger = lateTrigger;
+  let adjustedNow = nowHours;
+
+  if (adjustedTrigger < start) adjustedTrigger += 24;
+  if (adjustedNow < start) adjustedNow += 24;
+
+  return adjustedNow >= adjustedTrigger ? "late" : "on-time";
+}
+
+function formatMinutesLeft(totalMinutes) {
+  const safeMinutes = Math.max(0, totalMinutes || 0);
+  const hours = Math.floor(safeMinutes / 60);
+  const mins = safeMinutes % 60;
+
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
 function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
   const options = [
     { key: "on-time", label: "Prayed on time", icon: Check, color: C.accent },
@@ -320,6 +431,7 @@ export default function HomeScreen() {
   const [selectedPrayer, setSelectedPrayer] = useState(null);
   const [times, setTimes] = useState({});
   const [message, setMessage] = useState("");
+  const [nowTick, setNowTick] = useState(Date.now());
 
   const streak = getStreak();
   const dayLog = getDayLog(selectedDate);
@@ -354,6 +466,12 @@ export default function HomeScreen() {
       );
     }
   }, [streak]);
+
+  useEffect(() => {
+    if (!isToday) return;
+    const id = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, [isToday]);
 
   const prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
 
@@ -411,6 +529,31 @@ export default function HomeScreen() {
     const s = dayLog[p];
     return s === "on-time" || s === "late";
   }).length;
+  const currentPrayerInfo = isToday
+    ? getCurrentPrayerInfo(times, new Date(nowTick))
+    : null;
+  const currentPrayerStatus = currentPrayerInfo
+    ? dayLog[currentPrayerInfo.currentPrayer] || "pending"
+    : "pending";
+  const currentPrayerStyle = STATUS_CONFIG[currentPrayerStatus] || STATUS_CONFIG.pending;
+  const isCurrentPrayerPrayed =
+    currentPrayerStatus === "on-time" || currentPrayerStatus === "late";
+
+  const handleSetCurrentPrayed = () => {
+    if (!currentPrayerInfo) return;
+    if (Platform.OS !== "web") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    const now = new Date(nowTick);
+    const nowHours =
+      now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    const autoStatus = getAutoPrayerStatus({
+      ...currentPrayerInfo,
+      nowHours,
+      prayerTimes: times,
+    });
+    setPrayerStatus(selectedDate, currentPrayerInfo.currentPrayer, autoStatus);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -480,6 +623,179 @@ export default function HomeScreen() {
             <Settings size={18} color={C.textSec} strokeWidth={1.8} />
           </TouchableOpacity>
         </View>
+
+        {/* Current Prayer */}
+        {isToday && currentPrayerInfo && (
+          <Animated.View
+            entering={FadeInDown.delay(30)}
+            style={{ paddingHorizontal: 20, marginBottom: 12 }}
+          >
+            <View
+              style={{
+                backgroundColor: C.card,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: C.border,
+                borderLeftWidth: 3,
+                borderLeftColor: currentPrayerStyle.color,
+                padding: 16,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={{ fontFamily: F.semi, fontSize: 12, color: C.textSec }}>
+                    CURRENT PRAYER
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    backgroundColor: `${currentPrayerStyle.color}18`,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: `${currentPrayerStyle.color}35`,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: F.semi,
+                      fontSize: 11,
+                      color: currentPrayerStyle.color,
+                    }}
+                  >
+                    {currentPrayerStyle.label}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text style={{ fontFamily: F.xbold, fontSize: 24, color: C.text }}>
+                  {currentPrayerInfo.currentPrayer}
+                </Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.text }}>
+                  {currentPrayerInfo.currentTime}
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  fontFamily: F.reg,
+                  fontSize: 12,
+                  color: C.textSec,
+                  marginTop: 6,
+                }}
+              >
+                Next: {currentPrayerInfo.nextPrayer} at {currentPrayerInfo.nextTime}
+              </Text>
+
+              <View style={{ marginTop: 10 }}>
+                <View
+                  style={{
+                    height: 8,
+                    borderRadius: 999,
+                    backgroundColor: C.cardAlt,
+                    borderWidth: 1,
+                    borderColor: C.border,
+                    overflow: "hidden",
+                  }}
+                >
+                  <View
+                    style={{
+                      height: "100%",
+                      width: `${Math.round(currentPrayerInfo.progressToNext * 100)}%`,
+                      backgroundColor: C.accent,
+                    }}
+                  />
+                </View>
+                <View
+                  style={{
+                    marginTop: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 5,
+                      flexShrink: 1,
+                    }}
+                  >
+                    <Clock size={13} color={C.textSec} strokeWidth={2} />
+                    <Text
+                      style={{
+                        fontFamily: F.reg,
+                        fontSize: 11,
+                        color: C.textSec,
+                        flexShrink: 1,
+                      }}
+                    >
+                      {formatMinutesLeft(currentPrayerInfo.minutesLeftToNext)} until {currentPrayerInfo.nextPrayer}
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontFamily: F.reg,
+                      fontSize: 11,
+                      color: C.textSec,
+                      textAlign: "right",
+                    }}
+                  >
+                    {Math.round(currentPrayerInfo.progressToNext * 100)}% elapsed
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={handleSetCurrentPrayed}
+                disabled={isCurrentPrayerPrayed}
+                style={{
+                  marginTop: 12,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  backgroundColor: isCurrentPrayerPrayed ? C.cardAlt : C.accent,
+                  borderWidth: 1,
+                  borderColor: isCurrentPrayerPrayed ? C.border : C.accentDim,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Check
+                    size={14}
+                    color={isCurrentPrayerPrayed ? C.textSec : "#0F1117"}
+                    strokeWidth={2.4}
+                  />
+                  <Text
+                    style={{
+                      fontFamily: F.semi,
+                      fontSize: 13,
+                      color: isCurrentPrayerPrayed ? C.textSec : "#0F1117",
+                    }}
+                  >
+                    Marked as prayed
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Streak & Message */}
         {isToday && (

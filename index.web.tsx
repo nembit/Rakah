@@ -2,11 +2,11 @@ import '@expo/metro-runtime';
 import { toPng } from 'html-to-image';
 import { serializeError } from 'serialize-error';
 import React, { useEffect } from 'react';
-import './__create/consoleToParent';
+import './lib/consoleToParent';
 import { renderRootComponent } from 'expo-router/build/renderRootComponent';
 
 import { LoadSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
-import './__create/reset.css';
+import './lib/reset.css';
 import CreateApp from './App';
 async function inlineGoogleFonts(): Promise<void> {
   // Find all <link> elements that load Google Fonts CSS
