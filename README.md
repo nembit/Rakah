@@ -1,61 +1,183 @@
 # Rakah
 
-Rakah is a comprehensive, dual-platform application (Web & Mobile) designed to be an elegant, premium tool for Islamic prayer (Salah) tracking and habit building. It helps individuals maintain their spiritual habits, track daily prayers, manage missed prayers (Qada), and motivates them toward perfect consistency.
+Rakah is a standalone Expo + React Native app for tracking daily prayers and qada (make-up prayers), with local-first persistence and optional backend integrations.
 
-## 🌟 Key Features
+Current release target: **v1.0.0**
 
-*   **Daily Prayer Tracking**: Dynamic calculation of exact prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha) based on the user's location and preferred calculation methods.
-*   **Habit Building & Gamification**: Stay motivated with continuous streak counters and milestone encouragements designed to help you build a lasting habit.
-*   **Detailed Status Logging**: Log each prayer as "On Time", "Late", "Missed", or leave it "Pending".
-*   **Qada Management**: Keep an accurate account of historically missed prayers and manage your journey to making them up.
-*   **Actionable Analytics**: Visualize your consistency and progress over time through informative dashboards and statistics.
-*   **Unified Experience**: A seamless and beautifully designed user experience across both the web and native mobile applications.
+## Highlights
 
-## 🛠️ Technology Stack
+- Prayer tracking across multiple screens (Home, Track, Qada, Stats).
+- Local-first data model using Zustand + AsyncStorage.
+- Smooth UI interactions with Reanimated and gesture support.
+- Works on Android, iOS, and Web with custom polyfills where needed.
+- Includes a mock backend for development and testing.
 
-Rakah is built as a monorepo setup encompassing both a modern web application and a cross-platform mobile app.
+## Tech Stack
 
-### Web Application (`/web`)
-A highly interactive full-stack React web application.
-*   **Framework**: React 18 powered by React Router v7 and Vite.
-*   **Backend & Server**: Hono server (`react-router-hono-server`) integrated with Auth.js (`@auth/core`, `@hono/auth-js`) for robust authentication.
-*   **Database**: Serverless PostgreSQL via Neon Database (`@neondatabase/serverless`).
-*   **Styling**: Tailwind CSS v4, supplemented with Chakra UI and framer-motion for fluid animations.
-*   **State Management**: Zustand and TanStack React Query.
-*   **Other Integrations**: Recharts (analytics), Three.js (3D graphics), Stripe (payments), and robust drag-and-drop features.
+- Expo SDK 54
+- React Native 0.81
+- Expo Router
+- Zustand (state management)
+- AsyncStorage (persistence)
+- React Query
+- Reanimated + Gesture Handler
 
-### Mobile Application (`/mobile`)
-A feature-rich native mobile companion app for iOS and Android.
-*   **Framework**: React Native (v0.81) built on Expo (v54), utilizing Expo Router for file-based navigation.
-*   **Styling**: Tailwind CSS integration (via PostCSS/NativeWind) ensuring design consistency with the web platform.
-*   **State Management**: Zustand and TanStack React Query, mirroring the web platform's state logic.
-*   **Native Capabilities**: Deep integration with device hardware via Expo modules (Camera, Location, Haptics, Notifications, Audio/Video).
-*   **Monetization**: React Native Purchases (RevenueCat) and React Native Google Mobile Ads.
+## Requirements
 
-## 📂 Project Structure
+- Node.js 20+ (recommended)
+- npm 10+
+- Git
+- Optional:
+  - Android Studio (Android emulator/local native builds)
+  - Expo Go (physical device testing)
+  - EAS CLI (cloud builds and store artifacts)
 
+## Quick Start
+
+1. Clone and install dependencies:
+
+```bash
+git clone <your-repo-url>
+cd Rakah
+npm install
 ```
-rakah/
-├── mobile/       # The React Native / Expo mobile application
-└── web/          # The React Router / Hono full-stack web application
+
+2. Create local environment file:
+
+```bash
+cp .env.example .env
 ```
 
-## 🚀 Getting Started
+3. (Optional) Start the mock backend:
 
-### Prerequisites
-*   Node.js (preferably the latest LTS)
-*   npm, yarn, or pnpm
-*   Expo CLI (for mobile development)
+```bash
+npm run mock:server
+```
 
-### Web Setup
-1. Navigate to the web directory: `cd web`
-2. Install dependencies: `npm install`
-3. Configure your `.env` file with necessary variables (Neon DB, Auth, Stripe, etc.).
-4. Start the development server: `npm run dev`
+4. Start the Expo development server:
 
-### Mobile Setup
-1. Navigate to the mobile directory: `cd mobile`
-2. Install dependencies: `npm install`
-3. Configure your `.env` file.
-4. Start the Expo development server: `npx expo start`
-5. Use the Expo Go app on your physical device, or run it in an iOS Simulator / Android Emulator.
+```bash
+npm run start
+```
+
+## Run Targets
+
+- Expo Go (recommended dev flow):
+  - Run `npm run start`
+  - Scan QR code on your phone
+- Android emulator/native:
+  - Run `npm run android`
+- Web:
+  - Run `npm run web`
+
+## Available Scripts
+
+- `npm run start` - Start Expo dev server
+- `npm run android` - Build/run Android locally (native)
+- `npm run ios` - Build/run iOS locally (native, macOS only)
+- `npm run web` - Run web target
+- `npm run lint` - Run linting
+- `npm run mock:server` - Start local mock API server
+
+## Environment Variables
+
+Configure values in `.env` (based on `.env.example`):
+
+- `EXPO_PUBLIC_API_BASE_URL` - API base URL used by app requests
+- `EXPO_PUBLIC_AUTH_BASE_URL` - Auth WebView base URL
+- `EXPO_PUBLIC_AUTH_PROXY_URL` - Optional auth proxy URL
+- `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` - Maps key (if maps enabled)
+- `EXPO_PUBLIC_UPLOADCARE_PUBLIC_KEY` - Uploadcare public key fallback
+- `EXPO_PUBLIC_LOGS_ENDPOINT` - Optional client log endpoint
+- `EXPO_PUBLIC_LOGS_API_KEY` - Optional log API key
+
+### Local API Note
+
+Default value in `.env.example` is emulator-friendly:
+
+`EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:4000/api`
+
+Use your machine LAN IP for physical-device testing.
+
+## Mock Backend
+
+The project includes a development mock API server at `mock-backend/server.js`.
+
+Endpoints:
+
+- `GET /health`
+- `POST /api/upload`
+- `POST /logs`
+
+Run it with:
+
+```bash
+npm run mock:server
+```
+
+## Project Structure
+
+```text
+src/
+  app/                 Expo Router screens/layouts
+  components/          Shared UI components
+  store/               Zustand stores
+  utils/               Utilities + auth/upload helpers
+polyfills/
+  web/                 Web-specific shims
+  native/              Native-specific overrides
+mock-backend/          Local API mock server
+assets/images/         App icon/splash assets
+```
+
+## Version 1.0.0 Release Checklist (GitHub)
+
+Before publishing the repository:
+
+- Confirm `package.json` version is `1.0.0`
+- Confirm `app.json` Expo version is `1.0.0`
+- Verify app metadata:
+  - name: `Rakah`
+  - slug: `rakah`
+  - android package: `com.rakah.app`
+  - ios bundle id: `com.rakah.app`
+- Ensure `.env` is not committed
+- Ensure icons/splash are final in `assets/images/`
+- Run smoke checks:
+
+```bash
+npm install
+npm run lint
+npm run start
+```
+
+Create and push a Git tag:
+
+```bash
+git add .
+git commit -m "Release v1.0.0"
+git tag v1.0.0
+git push origin main --tags
+```
+
+## Play Store Readiness (AAB)
+
+For Google Play, upload an **AAB** (not APK) using EAS Build:
+
+```bash
+npm install -g eas-cli
+eas login
+eas build:configure
+eas build -p android --profile production
+```
+
+Then upload the generated AAB in Google Play Console.
+
+## Notes
+
+- This codebase was migrated away from Anything.com runtime coupling and now runs as a standalone Expo app.
+- Some platform polyfills and package patches are intentionally included for compatibility.
+
+## License
+
+No license file is currently included. Add one before open-source distribution (for example MIT) if you plan to make the repository public.
