@@ -19,10 +19,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
-      ],
+      "permissions": [],
       "package": "com.rakah.app"
     },
     "plugins": [
@@ -46,6 +43,11 @@
         {
           "ios": {
             "useFrameworks": "static"
+          },
+          "android": {
+            "blockedPermissions": [
+              "android.permission.ACTIVITY_RECOGNITION"
+            ]
           }
         }
       ],
