@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Dimensions,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -29,6 +30,12 @@ import {
   Minus,
   ChevronLeft,
   ChevronRight,
+  MapPin,
+  Sunrise,
+  Sun,
+  CloudSun,
+  Sunset,
+  Moon,
 } from "lucide-react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -95,6 +102,22 @@ const ENCOURAGEMENTS = [
   "Today's prayers shape tomorrow's character.",
   "You showed up. That matters. 🌿",
 ];
+
+const PRAYER_ICON_CONFIG = {
+  Fajr: { icon: Sunrise, color: "#7DD3FC" },
+  Dhuhr: { icon: Sun, color: "#FDE047" },
+  Asr: { icon: CloudSun, color: "#FBBF24" },
+  Maghrib: { icon: Sunset, color: "#FB923C" },
+  Isha: { icon: Moon, color: "#A5B4FC" },
+};
+
+const PRAYER_BANNER_IMAGES = {
+  Fajr: require("../../../assets/images/prayers/Fajr.png"),
+  Dhuhr: require("../../../assets/images/prayers/Dhuhr.png"),
+  Asr: require("../../../assets/images/prayers/Asr.png"),
+  Maghrib: require("../../../assets/images/prayers/Maghrib.png"),
+  Isha: require("../../../assets/images/prayers/Isha.png"),
+};
 
 function getCurrentPrayerInfo(prayerTimes, nowDate = new Date()) {
   const order = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
@@ -205,6 +228,43 @@ function formatMinutesLeft(totalMinutes) {
   if (hours === 0) return `${mins}m`;
   if (mins === 0) return `${hours}h`;
   return `${hours}h ${mins}m`;
+}
+
+function PrayerHorizonVisual({ prayer }) {
+  const accent = (PRAYER_ICON_CONFIG[prayer] || PRAYER_ICON_CONFIG.Fajr).color;
+  const source = PRAYER_BANNER_IMAGES[prayer] || PRAYER_BANNER_IMAGES.Fajr;
+  const bannerHeight = Math.round(SCREEN_W / 3);
+
+  return (
+    <View
+      style={{
+        marginBottom: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: `${accent}38`,
+        height: bannerHeight,
+        overflow: "hidden",
+        backgroundColor: "#111826",
+      }}
+    >
+      <Image
+        source={source}
+        resizeMode="cover"
+        style={{ width: "100%", height: "100%", borderRadius: 13 }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(8, 12, 20, 0.08)",
+          borderRadius: 13,
+        }}
+      />
+    </View>
+  );
 }
 
 function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
@@ -329,6 +389,11 @@ function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
 
 function PrayerCard({ prayer, time, status, onTap, onLongPress, index }) {
   const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const prayerIcon = PRAYER_ICON_CONFIG[prayer] || {
+    icon: Clock,
+    color: C.textSec,
+  };
+  const PrayerIcon = prayerIcon.icon;
   const scale = useSharedValue(1);
   const shakeX = useSharedValue(0);
 
@@ -386,6 +451,21 @@ function PrayerCard({ prayer, time, status, onTap, onLongPress, index }) {
           alignItems: "center",
         }}
       >
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: `${prayerIcon.color}20`,
+            borderWidth: 1,
+            borderColor: `${prayerIcon.color}40`,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 12,
+          }}
+        >
+          <PrayerIcon size={18} color={prayerIcon.color} strokeWidth={2} />
+        </View>
         <View style={{ flex: 1 }}>
           <Text
             style={{
@@ -538,6 +618,7 @@ export default function HomeScreen() {
   const currentPrayerStyle = STATUS_CONFIG[currentPrayerStatus] || STATUS_CONFIG.pending;
   const isCurrentPrayerPrayed =
     currentPrayerStatus === "on-time" || currentPrayerStatus === "late";
+  const currentLocationLabel = settings?.location?.city || "Location not set";
 
   const handleSetCurrentPrayed = () => {
     if (!currentPrayerInfo) return;
@@ -606,6 +687,19 @@ export default function HomeScreen() {
                 ? formatDisplayDate(selectedDate)
                 : formatRelativeDate(selectedDate)}
             </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 }}>
+              <MapPin size={12} color={C.textDim} strokeWidth={2} />
+              <Text
+                style={{
+                  fontFamily: F.reg,
+                  fontSize: 12,
+                  color: C.textDim,
+                }}
+                numberOfLines={1}
+              >
+                {currentLocationLabel}
+              </Text>
+            </View>
           </View>
           <TouchableOpacity
             onPress={() => router.push("/settings")}
@@ -641,6 +735,8 @@ export default function HomeScreen() {
                 padding: 16,
               }}
             >
+              <PrayerHorizonVisual prayer={currentPrayerInfo.currentPrayer} />
+
               <View
                 style={{
                   flexDirection: "row",
@@ -699,7 +795,7 @@ export default function HomeScreen() {
                   marginTop: 6,
                 }}
               >
-                Next: {currentPrayerInfo.nextPrayer} at {currentPrayerInfo.nextTime}
+                Upcoming: {currentPrayerInfo.nextPrayer} at {currentPrayerInfo.nextTime}
               </Text>
 
               <View style={{ marginTop: 10 }}>
@@ -789,7 +885,9 @@ export default function HomeScreen() {
                       color: isCurrentPrayerPrayed ? C.textSec : "#0F1117",
                     }}
                   >
-                    Marked as prayed
+                    {isCurrentPrayerPrayed
+                      ? "Marked as prayed"
+                      : "Mark as prayed"}
                   </Text>
                 </View>
               </TouchableOpacity>
