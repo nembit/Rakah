@@ -1,7 +1,9 @@
 import { useAuth } from "@/utils/auth/useAuth";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
 import { useEffect } from "react";
+import { setupNotificationChannel } from "@/utils/prayerNotifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -15,6 +17,15 @@ import {
 import usePrayerStore from "@/store/prayerStore";
 
 SplashScreen.preventAutoHideAsync();
+
+// Show notifications even when app is foregrounded
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +54,7 @@ export default function RootLayout() {
   useEffect(() => {
     initiate();
     hydrate();
+    setupNotificationChannel();
   }, [initiate, hydrate]);
 
   useEffect(() => {
@@ -65,6 +77,10 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="index" />
+          <Stack.Screen
+            name="onboarding"
+            options={{ headerShown: false, animation: "fade" }}
+          />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="settings"

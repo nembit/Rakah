@@ -212,8 +212,9 @@ export default function StatsScreen() {
   const streak = getStreak();
   const bestStreak = getBestStreak();
   const weeklyPct = getWeeklyConsistency();
-  const { mostMissed, bestPrayer, overallConsistency } = getStats();
+  const { mostMissed, bestPrayer, overallConsistency, hasData } = getStats();
   const sunnahStats = sunnahTracking ? getSunnahStats() : null;
+  const noData = !hasData && Object.keys(prayerLogs).length === 0;
 
   const prayerStats = useMemo(() => {
     return PRAYERS.map((prayer) => {
@@ -289,6 +290,47 @@ export default function StatsScreen() {
           </Text>
         </View>
 
+        {/* Empty state */}
+        {noData && (
+          <Animated.View
+            entering={FadeInDown.delay(50)}
+            style={{
+              marginHorizontal: 20,
+              backgroundColor: C.card,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: C.border,
+              padding: 32,
+              alignItems: "center",
+              marginBottom: 20,
+            }}
+          >
+            <Text style={{ fontSize: 40, marginBottom: 16 }}>📊</Text>
+            <Text
+              style={{
+                fontFamily: F.bold,
+                fontSize: 18,
+                color: C.text,
+                textAlign: "center",
+                marginBottom: 10,
+              }}
+            >
+              No data yet
+            </Text>
+            <Text
+              style={{
+                fontFamily: F.reg,
+                fontSize: 14,
+                color: C.textSec,
+                textAlign: "center",
+                lineHeight: 22,
+              }}
+            >
+              Start tracking your prayers on the Home tab and your insights will appear here.
+            </Text>
+          </Animated.View>
+        )}
+
         {/* Consistency Ring + Weekly */}
         <Animated.View
           entering={FadeInDown.delay(50)}
@@ -359,7 +401,7 @@ export default function StatsScreen() {
                   <Text
                     style={{ fontFamily: F.semi, fontSize: 13, color: C.text }}
                   >
-                    {bestPrayer}
+                    {bestPrayer ?? "—"}
                   </Text>
                 </View>
                 <View
@@ -378,9 +420,9 @@ export default function StatsScreen() {
                     Most missed
                   </Text>
                   <Text
-                    style={{ fontFamily: F.semi, fontSize: 13, color: C.red }}
+                    style={{ fontFamily: F.semi, fontSize: 13, color: mostMissed ? C.red : C.textSec }}
                   >
-                    {mostMissed}
+                    {mostMissed ?? "—"}
                   </Text>
                 </View>
               </View>

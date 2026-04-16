@@ -5,9 +5,15 @@ import {
   ScrollView,
   TouchableOpacity,
   Pressable,
+  TextInput,
   Modal,
   Platform,
   Dimensions,
+  Alert,
+  Linking,
+  Share,
+  PanResponder,
+  Animated as RNAnimated,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,7 +25,6 @@ import Animated, {
   withDelay,
   useSharedValue,
   useAnimatedStyle,
-  runOnJS,
 } from "react-native-reanimated";
 import {
   Settings,
@@ -36,11 +41,16 @@ import {
   CloudSun,
   Sunset,
   Moon,
+  Heart,
+  Sparkles,
+  Star,
 } from "lucide-react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as StoreReview from "expo-store-review";
 import usePrayerStore, { SUNNAH_CONFIG } from "@/store/prayerStore";
 import { calculatePrayerTimes } from "@/utils/prayerTimes";
+import { schedulePrayerNotifications } from "@/utils/prayerNotifications";
 import {
   today,
   formatDisplayDate,
@@ -48,6 +58,7 @@ import {
   addDays,
   formatRelativeDate,
   fromDateString,
+  formatHijriDate,
 } from "@/utils/dateUtils";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -61,6 +72,7 @@ const C = {
   gold: "#F59E0B",
   red: "#EF4444",
   teal: "#38BDF8",
+  violet: "#8B5CF6",
   text: "#F9FAFB",
   textSec: "#9CA3AF",
   textDim: "#4B5563",
@@ -75,26 +87,17 @@ const F = {
 };
 
 const STATUS_CONFIG = {
-  pending: {
-    label: "Pending",
-    color: C.textDim,
-    bg: "#1E2232",
-    border: C.border,
-  },
-  "on-time": {
-    label: "On Time",
-    color: C.accent,
-    bg: "#0D2E1A",
-    border: C.accentDim,
-  },
+  pending: { label: "Pending", color: C.textDim, bg: "#1E2232", border: C.border },
+  "on-time": { label: "On Time", color: C.accent, bg: "#0D2E1A", border: C.accentDim },
   late: { label: "Late", color: C.gold, bg: "#2A1F0A", border: "#7A5200" },
   missed: { label: "Missed", color: C.red, bg: "#2A0F0F", border: "#7A1F1F" },
+  exempt: { label: "Exempt", color: C.violet, bg: "#1A1030", border: "#4C2D8A" },
 };
 
 const MILESTONES = {
   3: "Three days strong — keep going! 🌙",
   7: "A full week! You're building something beautiful. 💫",
-  30: "30 days! MashaAllah — a true commitment. ✨",
+  30: "30 days! Mashallah — a true commitment. ✨",
 };
 const ENCOURAGEMENTS = [
   "Every prayer is a conversation with Allah.",
@@ -102,6 +105,7 @@ const ENCOURAGEMENTS = [
   "Today's prayers shape tomorrow's character.",
   "You showed up. That matters. 🌿",
 ];
+const FEEDBACK_EMAIL = "support@rakah.app";
 
 const PRAYER_ICON_CONFIG = {
   Fajr: { icon: Sunrise, color: "#7DD3FC" },
@@ -269,6 +273,66 @@ function PrayerHorizonVisual({ prayer }) {
 }
 
 function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
+  const dragY = useRef(new RNAnimated.Value(0)).current;
+  const dragStartYRef = useRef(0);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    if (visible) dragY.setValue(0);
+  }, [visible]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dy) > 2,
+      onPanResponderGrant: () => {
+        isDraggingRef.current = true;
+        dragY.stopAnimation((value) => {
+          dragStartYRef.current = value;
+        });
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const next = dragStartYRef.current + gestureState.dy;
+        dragY.setValue(Math.max(0, next));
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const shouldClose = gestureState.dy > 80 || gestureState.vy > 0.9;
+        if (shouldClose) {
+          RNAnimated.timing(dragY, {
+            toValue: 420,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(({ finished }) => {
+            if (finished) onClose();
+          });
+        } else {
+          RNAnimated.spring(dragY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 220,
+            useNativeDriver: true,
+          }).start();
+        }
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 40);
+      },
+      onPanResponderTerminate: () => {
+        RNAnimated.spring(dragY, {
+          toValue: 0,
+          damping: 18,
+          stiffness: 220,
+          useNativeDriver: true,
+        }).start();
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 40);
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+  ).current;
+
   const options = [
     { key: "on-time", label: "Prayed on time", icon: Check, color: C.accent },
     { key: "late", label: "Prayed late", icon: Clock, color: C.gold },
@@ -288,28 +352,42 @@ function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
           backgroundColor: "rgba(0,0,0,0.7)",
           justifyContent: "flex-end",
         }}
-        onPress={onClose}
+        onPress={() => {
+          if (isDraggingRef.current) return;
+          onClose();
+        }}
       >
-        <Pressable onPress={(e) => e.stopPropagation()}>
-          <View
-            style={{
-              backgroundColor: C.card,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              padding: 24,
-              paddingBottom: 36,
-            }}
+        <View>
+          <RNAnimated.View
+            style={[
+              {
+                backgroundColor: C.card,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                padding: 24,
+                paddingBottom: 14,
+              },
+              { transform: [{ translateY: dragY }] },
+            ]}
           >
             <View
+              {...panResponder.panHandlers}
               style={{
-                width: 36,
-                height: 4,
-                backgroundColor: C.border,
-                borderRadius: 2,
-                alignSelf: "center",
-                marginBottom: 20,
+                paddingVertical: 8,
+                marginTop: -8,
+                marginBottom: 12,
+                alignItems: "center",
               }}
-            />
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 4,
+                  backgroundColor: C.border,
+                  borderRadius: 2,
+                }}
+              />
+            </View>
             <Text
               style={{
                 fontFamily: F.semi,
@@ -381,6 +459,385 @@ function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
                 </TouchableOpacity>
               );
             })}
+          </RNAnimated.View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function SupportModal({ visible, onClose, onSelectTier, supportTiers }) {
+  const dragY = useRef(new RNAnimated.Value(0)).current;
+  const dragStartYRef = useRef(0);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    if (visible) dragY.setValue(0);
+  }, [visible]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dy) > 2,
+      onPanResponderGrant: () => {
+        isDraggingRef.current = true;
+        dragY.stopAnimation((value) => {
+          dragStartYRef.current = value;
+        });
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const next = dragStartYRef.current + gestureState.dy;
+        dragY.setValue(Math.max(0, next));
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const shouldClose = gestureState.dy > 80 || gestureState.vy > 0.9;
+        if (shouldClose) {
+          RNAnimated.timing(dragY, {
+            toValue: 420,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(({ finished }) => {
+            if (finished) onClose();
+          });
+        } else {
+          RNAnimated.spring(dragY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 220,
+            useNativeDriver: true,
+          }).start();
+        }
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 40);
+      },
+      onPanResponderTerminate: () => {
+        RNAnimated.spring(dragY, {
+          toValue: 0,
+          damping: 18,
+          stiffness: 220,
+          useNativeDriver: true,
+        }).start();
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 40);
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+  ).current;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.7)",
+          justifyContent: "flex-end",
+        }}
+        onPress={() => {
+          if (isDraggingRef.current) return;
+          onClose();
+        }}
+      >
+        <View>
+          <RNAnimated.View
+            style={[
+              {
+                backgroundColor: C.card,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                padding: 24,
+                paddingBottom: 36,
+              },
+              { transform: [{ translateY: dragY }] },
+            ]}
+          >
+            <View
+              {...panResponder.panHandlers}
+              style={{
+                paddingVertical: 8,
+                marginTop: -8,
+                marginBottom: 12,
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 4,
+                  backgroundColor: C.border,
+                  borderRadius: 2,
+                }}
+              />
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Sparkles size={16} color={C.gold} strokeWidth={2} />
+              <Text style={{ fontFamily: F.bold, fontSize: 20, color: C.text }}>
+                Keep Rakah free for the Ummah
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontFamily: F.reg,
+                fontSize: 13,
+                color: C.textSec,
+                lineHeight: 20,
+                marginTop: 8,
+                marginBottom: 16,
+              }}
+            >
+              Rakah is a free app with no ads and no data collection. If it helps your prayer,
+              consider supporting us — it keeps the app alive and free for everyone.
+            </Text>
+
+            <ScrollView
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ paddingBottom: 0 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {supportTiers.map((tier) => (
+                <TouchableOpacity
+                  key={tier.key}
+                  onPress={onSelectTier}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    padding: 15,
+                    backgroundColor: C.cardAlt,
+                    borderRadius: 14,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: C.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      backgroundColor: `${C.accent}18`,
+                      borderWidth: 1,
+                      borderColor: `${C.accent}35`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {tier.key === "monthly" ? (
+                      <Clock size={15} color={C.accent} strokeWidth={2} />
+                    ) : tier.key === "lifetime" ? (
+                      <Sparkles size={15} color={C.accent} strokeWidth={2} />
+                    ) : tier.key === "custom" ? (
+                      <Minus size={15} color={C.accent} strokeWidth={2} />
+                    ) : (
+                      <Heart size={15} color={C.accent} strokeWidth={2} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.text }}>
+                      {tier.label}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: F.reg,
+                        fontSize: 12,
+                        color: C.textSec,
+                        marginTop: 2,
+                      }}
+                    >
+                      {tier.desc}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      backgroundColor: `${C.accent}18`,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: `${C.accent}35`,
+                    }}
+                  >
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.accent }}>
+                      {tier.price}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                onPress={onClose}
+                style={{
+                  marginTop: 4,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  backgroundColor: "transparent",
+                }}
+              >
+                <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.textSec }}>
+                  Not now
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </RNAnimated.View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function ReviewFunnelModal({
+  visible,
+  rating,
+  feedbackText,
+  onSetRating,
+  onChangeFeedback,
+  onHighRatingSelect,
+  onClose,
+  onSubmit,
+}) {
+  const isLowRating = rating > 0 && rating <= 3;
+  const canSubmit = rating >= 1 && (!isLowRating || feedbackText.trim().length > 0);
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.72)",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+        }}
+        onPress={onClose}
+      >
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <View
+            style={{
+              backgroundColor: C.card,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: C.border,
+              padding: 20,
+            }}
+          >
+            <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.text, textAlign: "center" }}>
+              How would you rate Rakah?
+            </Text>
+            <Text
+              style={{
+                fontFamily: F.reg,
+                fontSize: 12,
+                color: C.textSec,
+                marginTop: 8,
+                textAlign: "center",
+              }}
+            >
+              Your feedback helps us improve and serve better.
+            </Text>
+
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 10, marginTop: 16 }}>
+              {[1, 2, 3, 4, 5].map((n) => {
+                const active = rating >= n;
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    onPress={() => {
+                      onSetRating(n);
+                      if (n >= 4) onHighRatingSelect(n);
+                    }}
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 19,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: active ? `${C.gold}18` : C.cardAlt,
+                      borderWidth: 1,
+                      borderColor: active ? `${C.gold}45` : C.border,
+                    }}
+                  >
+                    <Star
+                      size={18}
+                      color={active ? C.gold : C.textDim}
+                      fill={active ? C.gold : "none"}
+                      strokeWidth={1.9}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {isLowRating && (
+              <View style={{ marginTop: 14 }}>
+                <Text
+                  style={{
+                    fontFamily: F.semi,
+                    fontSize: 12,
+                    color: C.textSec,
+                    marginBottom: 8,
+                  }}
+                >
+                  What can we improve?
+                </Text>
+                <TextInput
+                  value={feedbackText}
+                  onChangeText={onChangeFeedback}
+                  placeholder="Tell us what you didn't like or what to improve"
+                  placeholderTextColor={C.textDim}
+                  multiline
+                  textAlignVertical="top"
+                  style={{
+                    minHeight: 92,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: C.border,
+                    backgroundColor: C.cardAlt,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    color: C.text,
+                    fontFamily: F.reg,
+                    fontSize: 13,
+                  }}
+                />
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={onSubmit}
+              disabled={!canSubmit}
+              style={{
+                marginTop: 18,
+                paddingVertical: 11,
+                borderRadius: 12,
+                alignItems: "center",
+                backgroundColor: canSubmit ? C.accent : C.cardAlt,
+                borderWidth: 1,
+                borderColor: canSubmit ? C.accentDim : C.border,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: F.semi,
+                  fontSize: 13,
+                  color: canSubmit ? "#0F1117" : C.textDim,
+                }}
+              >
+                {isLowRating ? "Submit" : "Continue"}
+              </Text>
+            </TouchableOpacity>
           </View>
         </Pressable>
       </Pressable>
@@ -390,9 +847,9 @@ function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
 
 function PrayerCard({
   prayer, time, status, onTap, onLongPress, index,
-  sunnahItems, sunnahLog, onSunnahToggle,
+  sunnahItems, sunnahLog, onSunnahToggle, isExempt, vibrationsEnabled,
 }) {
-  const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const sc = isExempt ? STATUS_CONFIG.exempt : (STATUS_CONFIG[status] || STATUS_CONFIG.pending);
   const prayerIcon = PRAYER_ICON_CONFIG[prayer] || { icon: Clock, color: C.textSec };
   const PrayerIcon = prayerIcon.icon;
   const scale = useSharedValue(1);
@@ -407,13 +864,13 @@ function PrayerCard({
       withTiming(0.97, { duration: 60 }),
       withTiming(1, { duration: 100 }),
     );
-    if (Platform.OS !== "web")
+    if (Platform.OS !== "web" && vibrationsEnabled)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onTap();
   };
 
   const handleLongPress = () => {
-    if (Platform.OS !== "web")
+    if (Platform.OS !== "web" && vibrationsEnabled)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onLongPress();
   };
@@ -450,9 +907,9 @@ function PrayerCard({
       >
         {/* Fard prayer row */}
         <TouchableOpacity
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          activeOpacity={0.8}
+          onPress={isExempt ? undefined : handlePress}
+          onLongPress={isExempt ? undefined : handleLongPress}
+          activeOpacity={isExempt ? 1 : 0.8}
           style={{
             padding: 18,
             flexDirection: "row",
@@ -499,7 +956,7 @@ function PrayerCard({
         </TouchableOpacity>
 
         {/* Sunnah section */}
-        {hasSunnah && (
+        {hasSunnah && !isExempt && (
           <View
             style={{
               borderTopWidth: 1,
@@ -549,40 +1006,67 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const {
     setPrayerStatus, getDayLog, settings, getStreak, adjustQada,
-    getDaySunnahLog, setSunnahStatus,
+    getDaySunnahLog, setSunnahStatus, getExemptDay, setExemptDay,
   } = usePrayerStore();
   const prayerLogs = usePrayerStore((s) => s.prayerLogs);
 
   const [selectedDate, setSelectedDate] = useState(today());
   const [modalVisible, setModalVisible] = useState(false);
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewFeedback, setReviewFeedback] = useState("");
   const [selectedPrayer, setSelectedPrayer] = useState(null);
   const [times, setTimes] = useState({});
   const [message, setMessage] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
+  const SUPPORT_TIERS = [
+    { key: "one-time", label: "One-time gift", price: "$2.99", desc: "Buy us a coffee" },
+    { key: "monthly", label: "Monthly supporter", price: "$0.99/mo", desc: "Keep the lights on" },
+    { key: "lifetime", label: "Lifetime supporter", price: "$9.99", desc: "Forever grateful" },
+    { key: "custom", label: "Custom amount", price: "Choose", desc: "Pick your own support amount" },
+  ];
 
   const streak = getStreak();
   const dayLog = getDayLog(selectedDate);
   const isToday = selectedDate === today();
 
   useEffect(() => {
-    const { latitude, longitude, timezone, calcMethod } = {
-      ...settings.location,
-      calcMethod: settings.calcMethod,
-    };
+    const { latitude, longitude, timezone } = settings.location;
     const date = fromDateString(selectedDate);
     try {
-      const t = calculatePrayerTimes(
-        date,
-        latitude,
-        longitude,
-        timezone,
-        settings.calcMethod,
-      );
+      const t = calculatePrayerTimes(date, latitude, longitude, timezone, settings.calcMethod);
       setTimes(t);
     } catch (e) {
       console.error("Prayer times error:", e);
     }
   }, [selectedDate, settings]);
+
+  // Schedule prayer notifications for today + tomorrow whenever
+  // today's times are freshly computed or notification preferences change.
+  useEffect(() => {
+    if (!isToday || Object.keys(times).length === 0) return;
+    const notifSettings = settings.notifications;
+    if (!notifSettings || !Object.values(notifSettings).some(Boolean)) return;
+
+    const { latitude, longitude, timezone } = settings.location;
+    const todayDate = fromDateString(today());
+    const tomorrowDate = new Date(todayDate);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+
+    let tomorrowTimes = {};
+    try {
+      tomorrowTimes = calculatePrayerTimes(
+        tomorrowDate, latitude, longitude, timezone, settings.calcMethod,
+      );
+    } catch {
+      // skip tomorrow if calculation fails
+    }
+
+    schedulePrayerNotifications(
+      times, tomorrowTimes, notifSettings, todayDate, tomorrowDate,
+    ).catch(() => {});
+  }, [times, settings.notifications, isToday]);
 
   useEffect(() => {
     if (MILESTONES[streak]) {
@@ -708,7 +1192,33 @@ export default function HomeScreen() {
   };
 
   const sunnahTracking = settings.sunnahTracking;
+  const gender = settings.gender;
   const daySunnahLog = getDaySunnahLog(selectedDate);
+  const exemptType = getExemptDay(selectedDate);
+  const isDayExempt = !!exemptType;
+
+  // A prayer on an exempt day only shows as exempt once its window has ended
+  // (next prayer has started). This way if the user was praying in the morning
+  // and became exempt at Dhuhr, Fajr shows its real status.
+  const getExemptForPrayer = (prayer) => {
+    if (!isDayExempt) return false;
+    const stored = dayLog[prayer] || "pending";
+    // Already logged (prayed or missed) — honour it regardless of exempt toggle
+    if (stored === "on-time" || stored === "late" || stored === "missed") return false;
+    // For past days we have no live clock, so all unprayed prayers are exempt
+    if (!isToday) return true;
+    // For today: exempt only once the prayer's window has ended
+    const NEXT = { Fajr: "Dhuhr", Dhuhr: "Asr", Asr: "Maghrib", Maghrib: "Isha" };
+    const now = new Date(nowTick);
+    const nextName = NEXT[prayer];
+    if (nextName) {
+      const nextTime = times[nextName]?.time;
+      return nextTime ? nextTime < now : false;
+    }
+    // Isha: exempt once Isha time has started (it's the last prayer)
+    const ishaTime = times.Isha?.time;
+    return ishaTime ? ishaTime < now : false;
+  };
 
   const completedCount = prayers.filter((p) => {
     const s = dayLog[p];
@@ -718,16 +1228,21 @@ export default function HomeScreen() {
     ? getCurrentPrayerInfo(times, new Date(nowTick))
     : null;
   const currentPrayerStatus = currentPrayerInfo
-    ? dayLog[currentPrayerInfo.currentPrayer] || "pending"
+    ? (getExemptForPrayer(currentPrayerInfo.currentPrayer) ? "exempt"
+      : dayLog[currentPrayerInfo.currentPrayer] || "pending")
     : "pending";
   const currentPrayerStyle = STATUS_CONFIG[currentPrayerStatus] || STATUS_CONFIG.pending;
   const isCurrentPrayerPrayed =
     currentPrayerStatus === "on-time" || currentPrayerStatus === "late";
   const currentLocationLabel = settings?.location?.city || "Location not set";
+  const loggedDaysCount = Object.values(prayerLogs || {}).filter((entry) =>
+    prayers.some((p) => (entry?.[p] || "pending") !== "pending"),
+  ).length;
+  const showRateCard = loggedDaysCount >= 7;
 
   const handleSetCurrentPrayed = () => {
     if (!currentPrayerInfo) return;
-    if (Platform.OS !== "web") {
+    if (Platform.OS !== "web" && settings.vibrations !== false) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
@@ -747,6 +1262,82 @@ export default function HomeScreen() {
     setPrayerStatus(selectedDate, currentPrayerInfo.currentPrayer, autoStatus);
   };
 
+  const handleSupportPress = () => {
+    setSupportModalVisible(true);
+  };
+
+  const handleSelectSupportTier = () => {
+    setSupportModalVisible(false);
+    Alert.alert(
+      "Thank you!",
+      "In-app purchases coming soon. JazakAllah Khair for your support!",
+    );
+  };
+
+  const openFeedbackComposer = async (feedback = "") => {
+    const subject = encodeURIComponent("Rakah feedback");
+    const body = encodeURIComponent(
+      `Assalamu alaikum,\n\nI wanted to share feedback about Rakah:\n\n${feedback}`,
+    );
+    const mailtoUrl = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+        return;
+      }
+      await Share.share({
+        title: "Send feedback",
+        message: `Assalamu alaikum,\n\nI wanted to share feedback about Rakah:\n\n${feedback}`,
+      });
+    } catch {
+      Alert.alert("Feedback", "Could not open feedback options right now.");
+    }
+  };
+
+  const handleRatePress = () => {
+    setReviewRating(0);
+    setReviewFeedback("");
+    setReviewModalVisible(true);
+  };
+
+  const handleHighRatingSelect = async () => {
+    setReviewModalVisible(false);
+    try {
+      const canReview = await StoreReview.hasAction();
+      if (canReview) {
+        await StoreReview.requestReview();
+        return;
+      }
+      Alert.alert(
+        "Rate Rakah",
+        "In-app rating is not available on this device right now.",
+      );
+    } catch {
+      Alert.alert("Rate Rakah", "Could not open the rating prompt right now.");
+    }
+  };
+
+  const handleSubmitReviewFunnel = async () => {
+    if (reviewRating < 1) return;
+
+    if (reviewRating >= 4) {
+      await handleHighRatingSelect();
+      return;
+    }
+
+    const text = reviewFeedback.trim();
+    if (!text) return;
+    setReviewModalVisible(false);
+    // Placeholder send path until backend endpoint is connected.
+    Alert.alert(
+      "Thanks for your feedback",
+      "Submitted successfully (placeholder). We'll use this to improve Rakah.",
+      [{ text: "OK", onPress: () => { openFeedbackComposer(text); } }],
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusModal
@@ -757,6 +1348,22 @@ export default function HomeScreen() {
         currentStatus={
           selectedPrayer ? dayLog[selectedPrayer] || "pending" : "pending"
         }
+      />
+      <SupportModal
+        visible={supportModalVisible}
+        onClose={() => setSupportModalVisible(false)}
+        onSelectTier={handleSelectSupportTier}
+        supportTiers={SUPPORT_TIERS}
+      />
+      <ReviewFunnelModal
+        visible={reviewModalVisible}
+        rating={reviewRating}
+        feedbackText={reviewFeedback}
+        onSetRating={setReviewRating}
+        onChangeFeedback={setReviewFeedback}
+        onHighRatingSelect={handleHighRatingSelect}
+        onClose={() => setReviewModalVisible(false)}
+        onSubmit={handleSubmitReviewFunnel}
       />
 
       <ScrollView
@@ -773,6 +1380,7 @@ export default function HomeScreen() {
             alignItems: "center",
             justifyContent: "space-between",
             marginBottom: 20,
+            position: "relative",
           }}
         >
           <View>
@@ -786,12 +1394,22 @@ export default function HomeScreen() {
             >
               Rakah
             </Text>
+          </View>
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              alignItems: "center",
+              pointerEvents: "none",
+              paddingTop: insets.top + 12,
+            }}
+          >
             <Text
               style={{
                 fontFamily: F.med,
                 fontSize: 13,
                 color: C.textSec,
-                marginTop: 2,
               }}
             >
               {formatRelativeDate(selectedDate) === "Today"
@@ -801,16 +1419,24 @@ export default function HomeScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 }}>
               <MapPin size={12} color={C.textDim} strokeWidth={2} />
               <Text
-                style={{
-                  fontFamily: F.reg,
-                  fontSize: 12,
-                  color: C.textDim,
-                }}
+                style={{ fontFamily: F.reg, fontSize: 12, color: C.textDim }}
                 numberOfLines={1}
               >
                 {currentLocationLabel}
               </Text>
             </View>
+            <Text
+              style={{
+                fontFamily: F.reg,
+                fontSize: 11,
+                color: C.textDim,
+                marginTop: 3,
+                letterSpacing: 0.2,
+                textAlign: "center",
+              }}
+            >
+              {formatHijriDate(fromDateString(selectedDate))}
+            </Text>
           </View>
           <TouchableOpacity
             onPress={() => router.push("/settings")}
@@ -970,48 +1596,56 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity
-                onPress={handleSetCurrentPrayed}
-                style={{
-                  marginTop: 12,
-                  paddingVertical: 10,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  backgroundColor: isCurrentPrayerPrayed ? C.cardAlt : C.accent,
-                  borderWidth: 1,
-                  borderColor: isCurrentPrayerPrayed ? C.border : C.accentDim,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  {isCurrentPrayerPrayed ? (
-                    <Minus
-                      size={14}
-                      color={C.textSec}
-                      strokeWidth={2.4}
-                    />
-                  ) : (
-                    <Check
-                      size={14}
-                      color="#0F1117"
-                      strokeWidth={2.4}
-                    />
-                  )}
-                  <Text
-                    style={{
-                      fontFamily: F.semi,
-                      fontSize: 13,
-                      color: isCurrentPrayerPrayed ? C.textSec : "#0F1117",
-                    }}
-                  >
-                    {isCurrentPrayerPrayed
-                      ? "Unmark prayed"
-                      : "Mark as prayed"}
+              {isDayExempt ? (
+                <View
+                  style={{
+                    marginTop: 12,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    backgroundColor: `${C.violet}15`,
+                    borderWidth: 1,
+                    borderColor: `${C.violet}40`,
+                  }}
+                >
+                  <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.violet }}>
+                    {exemptType === "haid" ? "Haid — Exempt Period" : "Nifas — Exempt Period"}
                   </Text>
                 </View>
-              </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={handleSetCurrentPrayed}
+                  style={{
+                    marginTop: 12,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    backgroundColor: isCurrentPrayerPrayed ? C.cardAlt : C.accent,
+                    borderWidth: 1,
+                    borderColor: isCurrentPrayerPrayed ? C.border : C.accentDim,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    {isCurrentPrayerPrayed ? (
+                      <Minus size={14} color={C.textSec} strokeWidth={2.4} />
+                    ) : (
+                      <Check size={14} color="#0F1117" strokeWidth={2.4} />
+                    )}
+                    <Text
+                      style={{
+                        fontFamily: F.semi,
+                        fontSize: 13,
+                        color: isCurrentPrayerPrayed ? C.textSec : "#0F1117",
+                      }}
+                    >
+                      {isCurrentPrayerPrayed ? "Unmark prayed" : "Mark as prayed"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
 
               {/* Sunnah section for current prayer */}
-              {sunnahTracking &&
+              {!isDayExempt && sunnahTracking &&
                 SUNNAH_CONFIG[currentPrayerInfo.currentPrayer]?.length > 0 && (
                 <View
                   style={{
@@ -1077,87 +1711,116 @@ export default function HomeScreen() {
           </Animated.View>
         )}
 
-        {/* Streak & Message */}
-        {isToday && (
+        <Animated.View
+          entering={FadeInDown.delay(65)}
+          style={{ paddingHorizontal: 20, marginBottom: 16 }}
+        >
+          <View
+            style={{
+              backgroundColor: C.card,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: C.border,
+              padding: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: `${C.accent}18`,
+                borderWidth: 1,
+                borderColor: `${C.accent}35`,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Heart size={15} color={C.accent} strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.text }}>
+                Keep Rakah free
+              </Text>
+              <Text style={{ fontFamily: F.reg, fontSize: 11, color: C.textSec, marginTop: 2 }}>
+                Support the app if it's helping your prayer journey
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleSupportPress}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 999,
+                backgroundColor: `${C.accent}18`,
+                borderWidth: 1,
+                borderColor: `${C.accent}35`,
+              }}
+            >
+              <Text style={{ fontFamily: F.semi, fontSize: 12, color: C.accent }}>
+                Support
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
+        {showRateCard && (
           <Animated.View
-            entering={FadeInDown.delay(50)}
-            style={{ paddingHorizontal: 20, marginBottom: 20 }}
+            entering={FadeInDown.delay(75)}
+            style={{ paddingHorizontal: 20, marginBottom: 16 }}
           >
             <View
               style={{
                 backgroundColor: C.card,
-                borderRadius: 18,
+                borderRadius: 16,
                 borderWidth: 1,
                 borderColor: C.border,
-                padding: 18,
+                padding: 14,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 14,
+                gap: 10,
               }}
             >
               <View
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: "#30280E",
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: `${C.gold}18`,
+                  borderWidth: 1,
+                  borderColor: `${C.gold}40`,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Flame size={22} color="#F4D35E" strokeWidth={1.8} />
+                <Star size={15} color={C.gold} strokeWidth={2} />
               </View>
               <View style={{ flex: 1 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "baseline",
-                    gap: 6,
-                  }}
-                >
-                  <Text
-                    style={{ fontFamily: F.xbold, fontSize: 28, color: "#F4D35E" }}
-                  >
-                    {streak}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: F.med,
-                      fontSize: 14,
-                      color: C.textSec,
-                    }}
-                  >
-                    day streak
-                  </Text>
-                </View>
-                <Text
-                  style={{
-                    fontFamily: F.reg,
-                    fontSize: 12,
-                    color: C.textSec,
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {message}
+                <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.text }}>
+                  Enjoying Rakah?
+                </Text>
+                <Text style={{ fontFamily: F.reg, fontSize: 11, color: C.textSec, marginTop: 2 }}>
+                  You've logged a week — a quick rating helps us a lot
                 </Text>
               </View>
-              <View
+              <TouchableOpacity
+                onPress={handleRatePress}
                 style={{
                   paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  backgroundColor: `${C.accent}15`,
+                  paddingVertical: 7,
                   borderRadius: 999,
+                  backgroundColor: `${C.gold}18`,
                   borderWidth: 1,
-                  borderColor: `${C.accent}30`,
+                  borderColor: `${C.gold}40`,
                 }}
               >
-                <Text
-                  style={{ fontFamily: F.semi, fontSize: 13, color: C.accent }}
-                >
-                  {completedCount}/5
+                <Text style={{ fontFamily: F.semi, fontSize: 12, color: C.gold }}>
+                  Rate us
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </Animated.View>
         )}
@@ -1212,24 +1875,192 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Exempt Period toggle — female users only */}
+        {gender === "female" && (
+          <Animated.View
+            entering={FadeInDown.delay(60)}
+            style={{
+              paddingHorizontal: 20,
+              marginBottom: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: F.semi,
+                fontSize: 11,
+                color: C.textDim,
+                letterSpacing: 0.5,
+                marginRight: 2,
+              }}
+            >
+              EXEMPT
+            </Text>
+            {[
+              { type: null, label: "None" },
+              { type: "haid", label: "Haid" },
+              { type: "nifas", label: "Nifas" },
+            ].map(({ type, label }) => {
+              const active = exemptType === type;
+              return (
+                <TouchableOpacity
+                  key={String(type)}
+                  onPress={() => setExemptDay(selectedDate, type)}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor: active
+                      ? type === null ? C.cardAlt : `${C.violet}20`
+                      : "transparent",
+                    borderWidth: 1,
+                    borderColor: active
+                      ? type === null ? C.border : `${C.violet}50`
+                      : C.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: F.semi,
+                      fontSize: 12,
+                      color: active
+                        ? type === null ? C.textSec : C.violet
+                        : C.textDim,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </Animated.View>
+        )}
+
+        {/* Streak & Message (summary card kept separate from prayer list) */}
+        {isToday && (
+          <Animated.View
+            entering={FadeInDown.delay(70)}
+            style={{ paddingHorizontal: 20, marginBottom: 18 }}
+          >
+            <Text
+              style={{
+                fontFamily: F.semi,
+                fontSize: 11,
+                color: C.textDim,
+                letterSpacing: 0.5,
+                marginBottom: 8,
+              }}
+            >
+              TODAY SUMMARY
+            </Text>
+            <View
+              style={{
+                backgroundColor: C.card,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: C.border,
+                padding: 18,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 14,
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "#30280E",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Flame size={22} color="#F4D35E" strokeWidth={1.8} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "baseline",
+                    gap: 6,
+                  }}
+                >
+                  <Text
+                    style={{ fontFamily: F.xbold, fontSize: 28, color: "#F4D35E" }}
+                  >
+                    {streak}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: F.med,
+                      fontSize: 14,
+                      color: C.textSec,
+                    }}
+                  >
+                    day streak
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontFamily: F.reg,
+                    fontSize: 12,
+                    color: C.textSec,
+                    marginTop: 2,
+                    lineHeight: 18,
+                  }}
+                >
+                  {message}
+                </Text>
+              </View>
+              <View
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  backgroundColor: completedCount === 5 ? `${C.accent}15` : C.cardAlt,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: completedCount === 5 ? `${C.accent}30` : C.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: F.semi,
+                    fontSize: 13,
+                    color: completedCount === 5 ? C.accent : C.textSec,
+                  }}
+                >
+                  {completedCount}/5
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
         {/* Prayer Cards */}
         <View style={{ paddingHorizontal: 20 }}>
-          {prayers.map((prayer, i) => (
-            <PrayerCard
-              key={prayer}
-              prayer={prayer}
-              time={times[prayer]?.formatted || "--:--"}
-              status={dayLog[prayer] || "pending"}
-              onTap={() => handlePrayerTap(prayer)}
-              onLongPress={() => handlePrayerLongPress(prayer)}
-              index={i}
-              sunnahItems={sunnahTracking ? SUNNAH_CONFIG[prayer] : undefined}
-              sunnahLog={sunnahTracking ? daySunnahLog : undefined}
-              onSunnahToggle={sunnahTracking
-                ? (key, status) => setSunnahStatus(selectedDate, key, status)
-                : undefined}
-            />
-          ))}
+          {prayers.map((prayer, i) => {
+            const prayerExempt = getExemptForPrayer(prayer);
+            return (
+              <PrayerCard
+                key={prayer}
+                prayer={prayer}
+                time={times[prayer]?.formatted || "--:--"}
+                status={dayLog[prayer] || "pending"}
+                onTap={() => handlePrayerTap(prayer)}
+                onLongPress={() => handlePrayerLongPress(prayer)}
+                index={i}
+                isExempt={prayerExempt}
+                vibrationsEnabled={settings.vibrations !== false}
+                sunnahItems={sunnahTracking ? SUNNAH_CONFIG[prayer] : undefined}
+                sunnahLog={sunnahTracking ? daySunnahLog : undefined}
+                onSunnahToggle={sunnahTracking
+                  ? (key, status) => setSunnahStatus(selectedDate, key, status)
+                  : undefined}
+              />
+            );
+          })}
         </View>
       </ScrollView>
     </View>

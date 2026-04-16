@@ -19,6 +19,9 @@ import Animated, {
   withSpring,
   withSequence,
   withTiming,
+  Easing,
+  interpolate,
+  Extrapolation,
   runOnJS,
 } from "react-native-reanimated";
 import {
@@ -68,6 +71,16 @@ const RAKAH_PER_PRAYER = {
   Isha: 4,
 };
 const EST_MIN_PER_RAKAH = 1.5;
+const CONFETTI_PARTICLES = [
+  { dx: -22, dy: -26, size: 5, color: "#2ECC71", delay: 0.0, rotation: -50 },
+  { dx: -10, dy: -32, size: 4, color: "#E8C15A", delay: 0.03, rotation: -20 },
+  { dx: 8, dy: -30, size: 5, color: "#38BDF8", delay: 0.05, rotation: 30 },
+  { dx: 22, dy: -24, size: 4, color: "#F59E0B", delay: 0.08, rotation: 55 },
+  { dx: -26, dy: -12, size: 4, color: "#A78BFA", delay: 0.02, rotation: -35 },
+  { dx: 26, dy: -10, size: 4, color: "#F97316", delay: 0.06, rotation: 35 },
+  { dx: -16, dy: -36, size: 3, color: "#F9FAFB", delay: 0.1, rotation: -70 },
+  { dx: 16, dy: -36, size: 3, color: "#F9FAFB", delay: 0.12, rotation: 70 },
+];
 
 function formatDuration(minutes) {
   const safeMinutes = Math.max(0, Math.round(minutes));
@@ -98,19 +111,19 @@ function AnimatedCounter({ value }) {
           setDisplayText(String(current));
           if (current <= next) clearInterval(interval);
         },
-        Math.max(20, Math.min(60, 300 / (prev - next + 1))),
+        Math.max(12, Math.min(30, 180 / (prev - next + 1))),
       );
       displayVal.value = next;
       scaleAnim.value = withSequence(
-        withTiming(1.15, { duration: 100 }),
-        withTiming(1, { duration: 150 }),
+        withTiming(1.13, { duration: 70 }),
+        withTiming(1, { duration: 90 }),
       );
     } else {
       displayVal.value = next;
       setDisplayText(String(next));
       scaleAnim.value = withSequence(
-        withTiming(1.12, { duration: 100 }),
-        withTiming(1, { duration: 150 }),
+        withTiming(1.1, { duration: 70 }),
+        withTiming(1, { duration: 90 }),
       );
     }
   }, [value]);
@@ -133,6 +146,46 @@ function AnimatedCounter({ value }) {
         {displayText}
       </Text>
     </Animated.View>
+  );
+}
+
+function ConfettiPiece({ progress, piece }) {
+  const style = useAnimatedStyle(() => {
+    const t = interpolate(
+      progress.value,
+      [0, piece.delay, 1],
+      [0, 0, 1],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(progress.value, [0, piece.delay + 0.05, 1], [0, 1, 0], Extrapolation.CLAMP);
+    return {
+      opacity,
+      transform: [
+        { translateX: piece.dx * t },
+        // Ease-out timing drives quick start then slow settle.
+        { translateY: piece.dy * t },
+        { rotate: `${piece.rotation * t}deg` },
+        { scale: interpolate(t, [0, 0.2, 1], [0.5, 1, 0.95], Extrapolation.CLAMP) },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          top: 10,
+          left: -piece.size / 2,
+          width: piece.size,
+          height: piece.size,
+          borderRadius: 1.5,
+          backgroundColor: piece.color,
+        },
+        style,
+      ]}
+    />
   );
 }
 
@@ -410,9 +463,12 @@ function QadaCard({
   onDecrement,
   onBulkSet,
   index,
+  vibrationsEnabled,
 }) {
   const scaleInc = useSharedValue(1);
   const scaleDec = useSharedValue(1);
+  const confettiBurst = useSharedValue(0);
+  const zeroTextBurst = useSharedValue(0);
   const rakahCount = count * (RAKAH_PER_PRAYER[prayer] || 0);
 
   const handleInc = () => {
@@ -420,20 +476,33 @@ function QadaCard({
       withTiming(0.92, { duration: 60 }),
       withTiming(1, { duration: 100 }),
     );
-    if (Platform.OS !== "web")
+    if (Platform.OS !== "web" && vibrationsEnabled)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onIncrement();
   };
 
   const handleDec = () => {
     if (count <= 0) return;
+    const willReachZero = count === 1;
     scaleDec.value = withSequence(
       withTiming(0.92, { duration: 60 }),
       withTiming(1, { duration: 100 }),
     );
-    if (Platform.OS !== "web")
+    if (Platform.OS !== "web" && vibrationsEnabled)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onDecrement();
+    confettiBurst.value = 0;
+    confettiBurst.value = withTiming(1, {
+      duration: 480,
+      easing: Easing.out(Easing.cubic),
+    });
+    if (willReachZero) {
+      zeroTextBurst.value = 0;
+      zeroTextBurst.value = withTiming(1, {
+        duration: 620,
+        easing: Easing.out(Easing.cubic),
+      });
+    }
   };
 
   const incStyle = useAnimatedStyle(() => ({
@@ -441,6 +510,13 @@ function QadaCard({
   }));
   const decStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleDec.value }],
+  }));
+  const zeroTextStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(zeroTextBurst.value, [0, 0.18, 0.8, 1], [0, 1, 1, 0], Extrapolation.CLAMP),
+    transform: [
+      { translateY: interpolate(zeroTextBurst.value, [0, 1], [0, -16], Extrapolation.CLAMP) },
+      { scale: interpolate(zeroTextBurst.value, [0, 0.2, 1], [0.9, 1.05, 1], Extrapolation.CLAMP) },
+    ],
   }));
 
   return (
@@ -499,7 +575,40 @@ function QadaCard({
           </TouchableOpacity>
         </Animated.View>
 
-        <View style={{ alignItems: "center" }}>
+        <View style={{ alignItems: "center", position: "relative", minWidth: 72 }}>
+          <Animated.Text
+            pointerEvents="none"
+            style={[
+              {
+                position: "absolute",
+                top: -20,
+                fontFamily: F.bold,
+                fontSize: 12,
+                color: C.accent,
+                letterSpacing: 0.2,
+              },
+              zeroTextStyle,
+            ]}
+          >
+            Mashallah
+          </Animated.Text>
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: -1,
+              left: "50%",
+              marginLeft: 1,
+              width: 2,
+              height: 36,
+              alignItems: "center",
+              justifyContent: "flex-start",
+            }}
+          >
+            {CONFETTI_PARTICLES.map((piece, idx) => (
+              <ConfettiPiece key={`${prayer}-confetti-${idx}`} progress={confettiBurst} piece={piece} />
+            ))}
+          </View>
           <AnimatedCounter value={count} />
           <Text
             style={{
@@ -569,6 +678,7 @@ export default function QadaScreen() {
   const qdaLog = usePrayerStore((s) => s.qdaLog);
   const adjustQada = usePrayerStore((s) => s.adjustQada);
   const setQadaCount = usePrayerStore((s) => s.setQadaCount);
+  const settings = usePrayerStore((s) => s.settings);
 
   const [bulkPrayer, setBulkPrayer] = useState(null);
   const [showLog, setShowLog] = useState(false);
@@ -725,7 +835,7 @@ export default function QadaScreen() {
                 marginTop: 6,
               }}
             >
-              MashaAllah — no backlog!
+              Mashallah — no backlog!
             </Text>
           )}
         </Animated.View>
@@ -741,6 +851,7 @@ export default function QadaScreen() {
               onDecrement={() => adjustQada(prayer, -1)}
               onBulkSet={() => setBulkPrayer(prayer)}
               index={i}
+              vibrationsEnabled={settings.vibrations !== false}
             />
           ))}
         </View>

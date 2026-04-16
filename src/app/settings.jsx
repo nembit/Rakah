@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import {
   Alert,
   Share,
   Platform,
+  Linking,
+  ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -26,13 +29,20 @@ import {
   ChevronRight,
   Navigation,
   Globe,
+  User,
+  Search,
+  X,
+  Star,
+  MessageCircle,
 } from "lucide-react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
+import * as StoreReview from "expo-store-review";
 import usePrayerStore from "@/store/prayerStore";
 import { getMethods } from "@/utils/prayerTimes";
+import { searchPlaces, getTimezoneOffset } from "@/utils/locationSearch";
 
 const C = {
   bg: "#0F1117",
@@ -56,6 +66,7 @@ const F = {
   xbold: "PlusJakartaSans_800ExtraBold",
 };
 const PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+const FEEDBACK_EMAIL = "support@rakah.app";
 
 function SectionHeader({ title }) {
   return (
@@ -235,27 +246,51 @@ function MethodModal({ visible, current, onClose, onSelect }) {
 
 function LocationModal({ visible, current, onClose, onSave }) {
   const [locType, setLocType] = useState(current?.type || "auto");
-  const [city, setCity] = useState(current?.city || "");
-  const [lat, setLat] = useState(String(current?.latitude || ""));
-  const [lon, setLon] = useState(String(current?.longitude || ""));
-  const [tz, setTz] = useState(String(current?.timezone ?? ""));
+  const [city, setCity] = useState(current?.city || "New York");
+  const [lat, setLat] = useState(String(current?.latitude || "40.7128"));
+  const [lon, setLon] = useState(String(current?.longitude || "-74.0060"));
+  const [tz, setTz] = useState(String(current?.timezone ?? "-4"));
   const [loading, setLoading] = useState(false);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [fetchingTz, setFetchingTz] = useState(false);
+
+  useEffect(() => {
+    if (searchQuery.length < 3) { setSearchResults([]); return; }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try { setSearchResults(await searchPlaces(searchQuery)); }
+      catch { setSearchResults([]); }
+      setSearching(false);
+    }, 550);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const selectPlace = async (place) => {
+    setCity(place.shortName);
+    setLat(place.lat);
+    setLon(place.lon);
+    setSearchQuery("");
+    setSearchResults([]);
+    setFetchingTz(true);
+    const offset = await getTimezoneOffset(place.lat, place.lon);
+    setTz(String(offset));
+    setFetchingTz(false);
+  };
 
   const detectLocation = async () => {
     setLoading(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Denied",
-          "Location permission is needed for prayer times.",
-        );
+        Alert.alert("Permission Denied", "Location permission is needed for prayer times.");
         setLoading(false);
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const [geo] = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
@@ -265,184 +300,196 @@ function LocationModal({ visible, current, onClose, onSave }) {
       setLon(String(loc.coords.longitude.toFixed(4)));
       setTz(String(tzOffset));
       setCity(geo?.city || geo?.region || "My Location");
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Could not detect location.");
     }
     setLoading(false);
   };
 
   const handleSave = () => {
-    const location = {
+    onSave({
       type: locType,
       latitude: parseFloat(lat) || 40.7128,
       longitude: parseFloat(lon) || -74.006,
-      city: city || "My Location",
+      city: city || "New York",
       timezone: parseFloat(tz) || -4,
-    };
-    onSave(location);
+    });
     onClose();
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.75)",
-          justifyContent: "flex-end",
-        }}
-        onPress={onClose}
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <Pressable onPress={(e) => e.stopPropagation()}>
-          <View
-            style={{
-              backgroundColor: C.card,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              padding: 24,
-              paddingBottom: 40,
-            }}
-          >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "flex-end" }}
+          onPress={onClose}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
             <View
               style={{
-                width: 36,
-                height: 4,
-                backgroundColor: C.border,
-                borderRadius: 2,
-                alignSelf: "center",
-                marginBottom: 20,
-              }}
-            />
-            <Text
-              style={{
-                fontFamily: F.bold,
-                fontSize: 18,
-                color: C.text,
-                textAlign: "center",
-                marginBottom: 20,
+                backgroundColor: C.card,
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
+                paddingBottom: 40,
+                maxHeight: "90%",
               }}
             >
-              Location
-            </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                backgroundColor: C.cardAlt,
-                borderRadius: 12,
-                padding: 4,
-                marginBottom: 20,
-              }}
-            >
-              {["auto", "manual"].map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => setLocType(t)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 9,
-                    borderRadius: 9,
-                    alignItems: "center",
-                    backgroundColor: locType === t ? C.card : "transparent",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: F.semi,
-                      fontSize: 13,
-                      color: locType === t ? C.text : C.textSec,
-                    }}
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ padding: 24 }}
+              >
+                <View style={{ width: 36, height: 4, backgroundColor: C.border, borderRadius: 2, alignSelf: "center", marginBottom: 20 }} />
+                <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.text, textAlign: "center", marginBottom: 20 }}>
+                  Location
+                </Text>
+
+                {/* Auto / Manual tab */}
+                <View style={{ flexDirection: "row", backgroundColor: C.cardAlt, borderRadius: 12, padding: 4, marginBottom: 20 }}>
+                  {["auto", "manual"].map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => setLocType(t)}
+                      style={{ flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: "center", backgroundColor: locType === t ? C.card : "transparent" }}
+                    >
+                      <Text style={{ fontFamily: F.semi, fontSize: 13, color: locType === t ? C.text : C.textSec }}>
+                        {t === "auto" ? "Auto GPS" : "Search / Manual"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {locType === "auto" ? (
+                  <TouchableOpacity
+                    onPress={detectLocation}
+                    disabled={loading}
+                    style={{ backgroundColor: C.accent, borderRadius: 14, paddingVertical: 15, alignItems: "center", marginBottom: 16, flexDirection: "row", justifyContent: "center", gap: 10 }}
                   >
-                    {t === "auto" ? "Auto GPS" : "Manual"}
+                    {loading ? <ActivityIndicator size="small" color="#0F1117" /> : <Navigation size={18} color="#0F1117" strokeWidth={2} />}
+                    <Text style={{ fontFamily: F.bold, fontSize: 15, color: "#0F1117" }}>
+                      {loading ? "Detecting..." : "Detect My Location"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    {/* Search input */}
+                    <View style={{ marginBottom: 6 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: C.cardAlt,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: searchQuery ? C.accent : C.border,
+                          paddingHorizontal: 12,
+                          gap: 8,
+                        }}
+                      >
+                        {searching ? (
+                          <ActivityIndicator size="small" color={C.textSec} />
+                        ) : (
+                          <Search size={16} color={C.textSec} strokeWidth={2} />
+                        )}
+                        <TextInput
+                          value={searchQuery}
+                          onChangeText={setSearchQuery}
+                          placeholder="Search for a city…"
+                          placeholderTextColor={C.textDim}
+                          returnKeyType="search"
+                          style={{ flex: 1, fontFamily: F.semi, fontSize: 14, color: C.text, paddingVertical: 13 }}
+                        />
+                        {searchQuery.length > 0 && (
+                          <TouchableOpacity onPress={() => { setSearchQuery(""); setSearchResults([]); }}>
+                            <X size={15} color={C.textSec} strokeWidth={2} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Results dropdown */}
+                      {searchResults.length > 0 && (
+                        <View
+                          style={{
+                            marginTop: 4,
+                            backgroundColor: C.cardAlt,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: C.border,
+                            overflow: "hidden",
+                          }}
+                        >
+                          {searchResults.map((place, idx) => (
+                            <TouchableOpacity
+                              key={place.id}
+                              onPress={() => selectPlace(place)}
+                              style={{
+                                paddingHorizontal: 14,
+                                paddingVertical: 12,
+                                borderTopWidth: idx > 0 ? 1 : 0,
+                                borderTopColor: C.border,
+                              }}
+                            >
+                              <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.text }}>
+                                {place.shortName}
+                              </Text>
+                              <Text style={{ fontFamily: F.reg, fontSize: 11, color: C.textSec, marginTop: 2 }} numberOfLines={1}>
+                                {place.displayName}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Editable fields */}
+                    {[
+                      { label: "City Name", value: city, setter: setCity, keyboard: "default" },
+                      { label: "Latitude", value: lat, setter: setLat, keyboard: "numbers-and-punctuation" },
+                      { label: "Longitude", value: lon, setter: setLon, keyboard: "numbers-and-punctuation" },
+                      { label: "UTC Offset", value: fetchingTz ? "…" : tz, setter: setTz, keyboard: "numbers-and-punctuation" },
+                    ].map(({ label, value, setter, keyboard }) => (
+                      <View key={label} style={{ marginBottom: 12 }}>
+                        <Text style={{ fontFamily: F.med, fontSize: 12, color: C.textSec, marginBottom: 6 }}>
+                          {label}
+                        </Text>
+                        <TextInput
+                          value={value}
+                          onChangeText={setter}
+                          keyboardType={keyboard}
+                          placeholderTextColor={C.textDim}
+                          editable={!fetchingTz}
+                          style={{
+                            backgroundColor: C.bg,
+                            borderRadius: 10,
+                            padding: 12,
+                            fontFamily: F.semi,
+                            fontSize: 15,
+                            color: fetchingTz ? C.textDim : C.text,
+                            borderWidth: 1,
+                            borderColor: C.border,
+                          }}
+                        />
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                <TouchableOpacity
+                  onPress={handleSave}
+                  style={{ backgroundColor: C.accent, borderRadius: 14, paddingVertical: 15, alignItems: "center", marginTop: 8 }}
+                >
+                  <Text style={{ fontFamily: F.bold, fontSize: 15, color: "#0F1117" }}>
+                    Save Location
                   </Text>
                 </TouchableOpacity>
-              ))}
+              </ScrollView>
             </View>
-            {locType === "auto" ? (
-              <TouchableOpacity
-                onPress={detectLocation}
-                disabled={loading}
-                style={{
-                  backgroundColor: C.accent,
-                  borderRadius: 14,
-                  paddingVertical: 15,
-                  alignItems: "center",
-                  marginBottom: 16,
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  gap: 10,
-                }}
-              >
-                <Navigation size={18} color="#0F1117" strokeWidth={2} />
-                <Text
-                  style={{ fontFamily: F.bold, fontSize: 15, color: "#0F1117" }}
-                >
-                  {loading ? "Detecting..." : "Detect My Location"}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            {["City Name", "Latitude", "Longitude", "UTC Offset"].map(
-              (label, i) => {
-                const vals = [city, lat, lon, tz];
-                const setters = [setCity, setLat, setLon, setTz];
-                return (
-                  <View key={label} style={{ marginBottom: 12 }}>
-                    <Text
-                      style={{
-                        fontFamily: F.med,
-                        fontSize: 12,
-                        color: C.textSec,
-                        marginBottom: 6,
-                      }}
-                    >
-                      {label}
-                    </Text>
-                    <TextInput
-                      value={vals[i]}
-                      onChangeText={setters[i]}
-                      keyboardType={
-                        i === 0 ? "default" : "numbers-and-punctuation"
-                      }
-                      placeholder={["New York", "40.7128", "-74.0060", "-4"][i]}
-                      placeholderTextColor={C.textDim}
-                      style={{
-                        backgroundColor: C.cardAlt,
-                        borderRadius: 10,
-                        padding: 12,
-                        fontFamily: F.semi,
-                        fontSize: 15,
-                        color: C.text,
-                        borderWidth: 1,
-                        borderColor: C.border,
-                      }}
-                    />
-                  </View>
-                );
-              },
-            )}
-            <TouchableOpacity
-              onPress={handleSave}
-              style={{
-                backgroundColor: C.accent,
-                borderRadius: 14,
-                paddingVertical: 15,
-                alignItems: "center",
-                marginTop: 8,
-              }}
-            >
-              <Text
-                style={{ fontFamily: F.bold, fontSize: 15, color: "#0F1117" }}
-              >
-                Save Location
-              </Text>
-            </TouchableOpacity>
-          </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -499,6 +546,45 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleRateApp = async () => {
+    try {
+      const canReview = await StoreReview.hasAction();
+      if (canReview) {
+        await StoreReview.requestReview();
+        return;
+      }
+      Alert.alert(
+        "Rate Rakah",
+        "In-app rating is not available on this device right now.",
+      );
+    } catch {
+      Alert.alert("Rate Rakah", "Could not open the rating prompt right now.");
+    }
+  };
+
+  const handleSendFeedback = async () => {
+    const subject = encodeURIComponent("Rakah feedback");
+    const body = encodeURIComponent(
+      "Assalamu alaikum,\n\nI wanted to share feedback about Rakah:\n\n",
+    );
+    const mailtoUrl = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+        return;
+      }
+      await Share.share({
+        title: "Send feedback",
+        message:
+          "Assalamu alaikum,\n\nI wanted to share feedback about Rakah:\n\n",
+      });
+    } catch {
+      Alert.alert("Feedback", "Could not open feedback options right now.");
+    }
+  };
+
   const SUPPORT_TIERS = [
     { label: "One-time gift", price: "$2.99", desc: "Buy us a coffee ☕" },
     {
@@ -510,6 +596,11 @@ export default function SettingsScreen() {
       label: "Lifetime supporter",
       price: "$9.99",
       desc: "Forever grateful 💚",
+    },
+    {
+      label: "Custom amount",
+      price: "Choose",
+      desc: "Pick your own support amount ✨",
     },
   ];
 
@@ -634,10 +725,118 @@ export default function SettingsScreen() {
             ))}
           </Animated.View>
 
+          {/* Rate & feedback */}
+          <SectionHeader title="RATE & FEEDBACK" />
+          <Animated.View
+            entering={FadeInDown.delay(140)}
+            style={{
+              backgroundColor: C.card,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: C.border,
+              marginBottom: 20,
+              overflow: "hidden",
+            }}
+          >
+            <SettingRow
+              icon={Star}
+              label="Rate Rakah"
+              subtitle="Leave a quick rating"
+              onPress={handleRateApp}
+              right={<ChevronRight size={16} color={C.textDim} strokeWidth={1.8} />}
+            />
+            <SettingRow
+              icon={MessageCircle}
+              label="Send Feedback"
+              subtitle="Email feedback directly"
+              onPress={handleSendFeedback}
+              noBorder
+              right={<ChevronRight size={16} color={C.textDim} strokeWidth={1.8} />}
+            />
+          </Animated.View>
+
+          {/* Profile */}
+          <SectionHeader title="PROFILE" />
+          <Animated.View
+            entering={FadeInDown.delay(160)}
+            style={{
+              backgroundColor: C.card,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: C.border,
+              marginBottom: 20,
+              overflow: "hidden",
+            }}
+          >
+            <View
+              style={{
+                paddingVertical: 14,
+                paddingHorizontal: 18,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: C.cardAlt,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 14,
+                  }}
+                >
+                  <User size={16} color={C.textSec} strokeWidth={1.8} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.text }}>
+                    Gender
+                  </Text>
+                  <Text style={{ fontFamily: F.reg, fontSize: 12, color: C.textSec, marginTop: 2 }}>
+                    Required for certain app functionality
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {[
+                  { value: "male", label: "Male" },
+                  { value: "female", label: "Female" },
+                ].map(({ value, label }) => {
+                  const active = settings.gender === value;
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      onPress={() => updateSettings({ gender: value })}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        alignItems: "center",
+                        backgroundColor: active ? `${C.accent}18` : C.cardAlt,
+                        borderWidth: 1,
+                        borderColor: active ? `${C.accent}45` : C.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: F.semi,
+                          fontSize: 14,
+                          color: active ? C.accent : C.textSec,
+                        }}
+                      >
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </Animated.View>
+
           {/* Tracking */}
           <SectionHeader title="TRACKING" />
           <Animated.View
-            entering={FadeInDown.delay(160)}
+            entering={FadeInDown.delay(200)}
             style={{
               backgroundColor: C.card,
               borderRadius: 18,
@@ -651,7 +850,7 @@ export default function SettingsScreen() {
               icon={BookOpen}
               label="Sunnah Prayers"
               subtitle="Track optional prayers"
-              noBorder
+              noBorder={false}
               right={
                 <Switch
                   value={!!settings.sunnahTracking}
@@ -661,12 +860,26 @@ export default function SettingsScreen() {
                 />
               }
             />
+            <SettingRow
+              icon={Navigation}
+              label="Vibrations"
+              subtitle="Haptic feedback for taps and actions"
+              noBorder
+              right={
+                <Switch
+                  value={settings.vibrations !== false}
+                  onValueChange={(v) => updateSettings({ vibrations: v })}
+                  trackColor={{ false: C.cardAlt, true: C.accentDim }}
+                  thumbColor={settings.vibrations !== false ? C.accent : C.textDim}
+                />
+              }
+            />
           </Animated.View>
 
           {/* Data */}
           <SectionHeader title="DATA & PRIVACY" />
           <Animated.View
-            entering={FadeInDown.delay(200)}
+            entering={FadeInDown.delay(240)}
             style={{
               backgroundColor: C.card,
               borderRadius: 18,
@@ -705,7 +918,7 @@ export default function SettingsScreen() {
           {/* Support */}
           <SectionHeader title="SUPPORT RAKAH" />
           <Animated.View
-            entering={FadeInDown.delay(240)}
+            entering={FadeInDown.delay(280)}
             style={{
               backgroundColor: C.card,
               borderRadius: 18,
@@ -741,7 +954,7 @@ export default function SettingsScreen() {
                 }}
               >
                 Rakah is a free app with no ads and no data collection. If it
-                helps your prayer practice, consider supporting us — it keeps
+                helps your prayer, consider supporting us — it keeps
                 the app alive and free for everyone.
               </Text>
               {SUPPORT_TIERS.map((tier, i) => (
