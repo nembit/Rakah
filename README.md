@@ -97,7 +97,14 @@ Default value in `.env.example` is emulator-friendly:
 
 `EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:4000/api`
 
-Use your machine LAN IP for physical-device testing.
+For physical-device testing, replace `10.0.2.2` with your machine's LAN IP address.
+
+### Active Variables
+
+| Variable | Purpose |
+|---|---|
+| `EXPO_PUBLIC_API_BASE_URL` | Base URL for the mock backend server |
+| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps key (only if map features are used) |
 
 ## Mock Backend
 
@@ -175,10 +182,23 @@ eas build -p android --profile production
 
 Then upload the generated AAB in Google Play Console.
 
+## Privacy Policy
+
+The privacy policy is a self-contained HTML page located at `docs/index.html`.
+
+To host it on GitHub Pages:
+1. Go to **Settings → Pages** in your GitHub repository.
+2. Set the **Source** to **Deploy from a branch**, branch `main`, folder `/docs`.
+3. The policy will be available at `https://<your-username>.github.io/Rakah/`.
+
+This URL is what you'll enter in the Google Play Console's privacy policy field.
+
 ## Notes
 
 - Some platform polyfills and package patches are intentionally included for compatibility.
 
 ## License
 
-No license file is currently included. Add one before open-source distribution (for example MIT) if you plan to make the repository public.
+Copyright (c) 2026 Rakah. All Rights Reserved.
+
+This software is proprietary. Viewing the source does not grant any right to use, copy, modify, or distribute it. See [LICENSE](./LICENSE) for full terms.

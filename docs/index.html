@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Rakah</title>
+  <meta name="description" content="Privacy policy for Rakah, the Islamic prayer tracking app. Rakah stores all data locally on your device and collects no personal information." />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #252836;
+      --accent: #2ecc71;
+      --text: #f9fafb;
+      --text-sec: #9ca3af;
+      --text-dim: #4b5563;
+      --red: #ef4444;
+      --radius: 14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Layout ── */
+    .wrapper {
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+    .logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: rgba(46, 204, 113, 0.12);
+      border: 1px solid rgba(46, 204, 113, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      flex-shrink: 0;
+    }
+    .header-text h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .header-text p {
+      color: var(--text-sec);
+      font-size: 0.875rem;
+      margin-top: 2px;
+    }
+
+    /* ── Highlight banner ── */
+    .highlight {
+      background: rgba(46, 204, 113, 0.08);
+      border: 1px solid rgba(46, 204, 113, 0.2);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 40px;
+    }
+    .highlight p {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .highlight p + p {
+      margin-top: 6px;
+      color: var(--text-sec);
+      font-weight: 400;
+    }
+
+    /* ── Sections ── */
+    section {
+      margin-bottom: 36px;
+    }
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    p { color: var(--text-sec); margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    li {
+      color: var(--text-sec);
+      padding-left: 20px;
+      position: relative;
+    }
+    li::before {
+      content: "•";
+      color: var(--accent);
+      position: absolute;
+      left: 4px;
+      top: 0;
+    }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; margin-top: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    thead th {
+      text-align: left;
+      color: var(--text-sec);
+      font-weight: 600;
+      padding: 10px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+    }
+    thead th:first-child { border-radius: var(--radius) 0 0 0; }
+    thead th:last-child  { border-radius: 0 var(--radius) 0 0; }
+    tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-sec);
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,0.02); }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .tag-green { background: rgba(46,204,113,.15); color: var(--accent); }
+    .tag-dim   { background: rgba(75,85,99,.25);   color: var(--text-dim); }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 56px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    @media (max-width: 520px) {
+      .header { flex-direction: column; align-items: flex-start; }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">🕌</div>
+      <div class="header-text">
+        <h1>Privacy Policy</h1>
+        <p>Rakah — Islamic Prayer Tracker &nbsp;·&nbsp; Effective April 16, 2026</p>
+      </div>
+    </div>
+
+    <!-- TL;DR Banner -->
+    <div class="highlight">
+      <p>🔒 Rakah collects absolutely no personal data.</p>
+      <p>Everything you enter — prayer logs, qada counts, settings — lives exclusively on your device. It is never transmitted to any server or third party.</p>
+    </div>
+
+    <!-- 1. Overview -->
+    <section>
+      <h2>1. Overview</h2>
+      <p>
+        Rakah ("the app", "we", "us") is a free, offline-first Islamic prayer tracking application for Android, iOS, and Web. This Privacy Policy explains what information the app accesses, how it is used, and your rights as a user.
+      </p>
+      <p>
+        Because Rakah is local-first by design, the vast majority of this document confirms what we do <em>not</em> do.
+      </p>
+    </section>
+
+    <!-- 2. Data We Collect -->
+    <section>
+      <h2>2. Data Collected &amp; Stored</h2>
+      <p>All data is stored locally on your device using AsyncStorage (React Native's standard on-device key-value store). No data is synced or backed up to a cloud service operated by Rakah.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data Type</th>
+              <th>Purpose</th>
+              <th>Location</th>
+              <th>Shared?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Prayer status logs<br><small>(on-time / late / missed / pending per prayer per day)</small></td>
+              <td>Core tracking functionality</td>
+              <td>On-device only</td>
+              <td><span class="tag tag-green">Never</span></td>
+            </tr>
+            <tr>
+              <td>Qada (make-up prayer) counts &amp; log history</td>
+              <td>Makeup prayer management</td>
+              <td>On-device only</td>
+              <td><span class="tag tag-green">Never</span></td>
+            </tr>
+            <tr>
+              <td>Sunnah prayer logs</td>
+              <td>Optional Sunnah tracking</td>
+              <td>On-device only</td>
+              <td><span class="tag tag-green">Never</span></td>
+            </tr>
+            <tr>
+              <td>Exempt period markers (Haid / Nifas)</td>
+              <td>Correctly exclude days from streaks / Qada</td>
+              <td>On-device only</td>
+              <td><span class="tag tag-green">Never</span></td>
+            </tr>
+            <tr>
+              <td>App settings<br><small>(location, calculation method, gender, notifications, 12/24h)</small></td>
+              <td>Personalise prayer times &amp; UI</td>
+              <td>On-device only</td>
+              <td><span class="tag tag-green">Never</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. Device Permissions -->
+    <section>
+      <h2>3. Device Permissions</h2>
+      <p>Rakah requests the following device permissions. Each permission is optional unless stated otherwise, and is used solely for the feature described.</p>
+      <ul>
+        <li><strong>Location (foreground only)</strong> — Used to automatically detect your coordinates for accurate prayer times and Qibla direction. Your location is read once per session and stored on-device as latitude/longitude. It is never sent to any server.</li>
+        <li><strong>Notifications</strong> — Used to send local, on-device prayer time reminders scheduled by the app. No server is involved in delivering these notifications.</li>
+        <li><strong>Magnetometer &amp; Accelerometer</strong> — Used by the Qibla compass screen to determine the device's heading. Sensor data is processed in real time and never stored or transmitted.</li>
+        <li><strong>Microphone (RECORD_AUDIO / MODIFY_AUDIO_SETTINGS)</strong> — Declared as required by an underlying audio SDK. Rakah does not actively use the microphone for any feature and does not record audio.</li>
+      </ul>
+    </section>
+
+    <!-- 4. Data Export -->
+    <section>
+      <h2>4. Data Export &amp; Import</h2>
+      <p>
+        Rakah provides a manual data export feature in Settings that writes all your prayer data to a JSON file on your device. You control what you do with that file. The app never automatically uploads backups anywhere.
+      </p>
+      <p>
+        You can also import a previously exported file, or clear all local data at any time from Settings → Clear All Data.
+      </p>
+    </section>
+
+    <!-- 5. Third-Party Services -->
+    <section>
+      <h2>5. Third-Party Services</h2>
+      <p>Rakah uses only a small number of third-party services, none of which receive personal or prayer data:</p>
+      <ul>
+        <li><strong>Nominatim / OpenStreetMap</strong> — Used when you search for a city name in the location picker. The search query (a city name you type) is sent to the public Nominatim API to return coordinates. No personally identifiable information accompanies this request. See <a href="https://nominatim.org/release-docs/latest/api/Search/" target="_blank" rel="noopener">Nominatim's usage policy</a>.</li>
+        <li><strong>TimeZoneDB</strong> — Optionally used to look up the UTC offset for a selected city. Only the latitude/longitude of the selected location is sent. See <a href="https://timezonedb.com/privacy-policy" target="_blank" rel="noopener">TimeZoneDB's privacy policy</a>.</li>
+        <li><strong>Expo (EAS)</strong> — Used to build and distribute the app. Expo processes metadata during the build process but does not have access to user data inside the app. See <a href="https://expo.dev/privacy" target="_blank" rel="noopener">Expo's privacy policy</a>.</li>
+      </ul>
+      <p>Rakah does <strong>not</strong> use analytics SDKs, crash reporting services, advertising SDKs, or any data broker services.</p>
+    </section>
+
+    <!-- 6. Children -->
+    <section>
+      <h2>6. Children's Privacy</h2>
+      <p>
+        Rakah does not knowingly collect any information from anyone, including children under the age of 13. Because no data is collected or transmitted, the app is suitable for users of all ages.
+      </p>
+    </section>
+
+    <!-- 7. Data Security -->
+    <section>
+      <h2>7. Data Security</h2>
+      <p>
+        Because all data remains on your device, its security depends on your device's own security (lock screen, encryption, etc.). We recommend keeping your operating system and the app updated. If you lose your device or uninstall the app, your data is not recoverable unless you have created a local backup using the export feature.
+      </p>
+    </section>
+
+    <!-- 8. Changes -->
+    <section>
+      <h2>8. Changes to This Policy</h2>
+      <p>
+        If we ever change how Rakah handles data, we will update this page and revise the effective date at the top. Significant changes will also be noted in the app's release notes.
+      </p>
+    </section>
+
+    <!-- 9. Contact -->
+    <section>
+      <h2>9. Contact</h2>
+      <p>
+        If you have questions about this privacy policy, please reach out at
+        <a href="mailto:support@rakah.app">support@rakah.app</a>.
+      </p>
+    </section>
+
+    <footer>
+      <span>© 2026 Rakah. Released under the MIT License.</span>
+      <span>Effective date: April 16, 2026</span>
+    </footer>
+
+  </div>
+</body>
+</html>

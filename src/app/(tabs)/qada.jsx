@@ -688,6 +688,8 @@ export default function QadaScreen() {
     (sum, p) => sum + (qdaCounts[p] || 0) * (RAKAH_PER_PRAYER[p] || 0),
     0,
   );
+  const qadaTotalColor = totalQada === 0 ? C.accent : C.qadaDarkBlue;
+  const rakahTotalColor = totalRakah === 0 ? C.accent : C.qadaWarmYellow;
   const estimatedTotalMinutes = totalRakah * EST_MIN_PER_RAKAH;
   const recentLog = qdaLog.slice(0, 20);
 
@@ -763,7 +765,7 @@ export default function QadaScreen() {
               style={{
                 fontFamily: F.xbold,
                 fontSize: 52,
-                color: C.qadaDarkBlue,
+                color: qadaTotalColor,
                 letterSpacing: -2,
               }}
             >
@@ -784,7 +786,7 @@ export default function QadaScreen() {
               style={{
                 fontFamily: F.bold,
                 fontSize: 28,
-                color: C.qadaWarmYellow,
+                color: rakahTotalColor,
                 marginTop: 8,
               }}
             >

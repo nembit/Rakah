@@ -99,16 +99,11 @@ const MILESTONES = {
   7: "A full week! You're building something beautiful. 💫",
   30: "30 days! Mashallah — a true commitment. ✨",
 };
-const ENCOURAGEMENTS = [
-  "Every prayer is a conversation with Allah.",
-  "Small steps, consistent faith.",
-  "Today's prayers shape tomorrow's character.",
-  "You showed up. That matters. 🌿",
-];
 const FEEDBACK_EMAIL = "support@rakah.app";
 
 const PRAYER_ICON_CONFIG = {
   Fajr: { icon: Sunrise, color: "#7DD3FC" },
+  Morning: { icon: Sun, color: "#FDE047" },
   Dhuhr: { icon: Sun, color: "#FDE047" },
   Asr: { icon: CloudSun, color: "#FBBF24" },
   Maghrib: { icon: Sunset, color: "#FB923C" },
@@ -117,11 +112,24 @@ const PRAYER_ICON_CONFIG = {
 
 const PRAYER_BANNER_IMAGES = {
   Fajr: require("../../../assets/images/prayers/Fajr.png"),
+  Morning: require("../../../assets/images/prayers/Morning.png"),
   Dhuhr: require("../../../assets/images/prayers/Dhuhr.png"),
   Asr: require("../../../assets/images/prayers/Asr.png"),
   Maghrib: require("../../../assets/images/prayers/Maghrib.png"),
   Isha: require("../../../assets/images/prayers/Isha.png"),
 };
+
+function getBannerKeyForNow(prayerTimes, fallbackPrayer, nowDate = new Date()) {
+  const nowHours =
+    nowDate.getHours() + nowDate.getMinutes() / 60 + nowDate.getSeconds() / 3600;
+  const sunrise = prayerTimes?.Sunrise?.time;
+  const dhuhr = prayerTimes?.Dhuhr?.time;
+
+  if (typeof sunrise === "number" && typeof dhuhr === "number") {
+    if (nowHours >= sunrise && nowHours < dhuhr) return "Morning";
+  }
+  return fallbackPrayer;
+}
 
 function getCurrentPrayerInfo(prayerTimes, nowDate = new Date()) {
   const order = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
@@ -1035,7 +1043,14 @@ export default function HomeScreen() {
     const { latitude, longitude, timezone } = settings.location;
     const date = fromDateString(selectedDate);
     try {
-      const t = calculatePrayerTimes(date, latitude, longitude, timezone, settings.calcMethod);
+      const t = calculatePrayerTimes(
+        date,
+        latitude,
+        longitude,
+        timezone,
+        settings.calcMethod,
+        !!settings.use24HourTime,
+      );
       setTimes(t);
     } catch (e) {
       console.error("Prayer times error:", e);
@@ -1057,7 +1072,12 @@ export default function HomeScreen() {
     let tomorrowTimes = {};
     try {
       tomorrowTimes = calculatePrayerTimes(
-        tomorrowDate, latitude, longitude, timezone, settings.calcMethod,
+        tomorrowDate,
+        latitude,
+        longitude,
+        timezone,
+        settings.calcMethod,
+        !!settings.use24HourTime,
       );
     } catch {
       // skip tomorrow if calculation fails
@@ -1072,9 +1092,7 @@ export default function HomeScreen() {
     if (MILESTONES[streak]) {
       setMessage(MILESTONES[streak]);
     } else {
-      setMessage(
-        ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)],
-      );
+      setMessage("");
     }
   }, [streak]);
 
@@ -1100,6 +1118,7 @@ export default function HomeScreen() {
         longitude,
         timezone,
         settings.calcMethod,
+        !!settings.use24HourTime,
       );
     } catch (e) {
       return;
@@ -1472,7 +1491,13 @@ export default function HomeScreen() {
                 padding: 16,
               }}
             >
-              <PrayerHorizonVisual prayer={currentPrayerInfo.currentPrayer} />
+              <PrayerHorizonVisual
+                prayer={getBannerKeyForNow(
+                  times,
+                  currentPrayerInfo.currentPrayer,
+                  new Date(nowTick),
+                )}
+              />
 
               <View
                 style={{
@@ -1713,7 +1738,7 @@ export default function HomeScreen() {
 
         <Animated.View
           entering={FadeInDown.delay(65)}
-          style={{ paddingHorizontal: 20, marginBottom: 16 }}
+          style={{ paddingHorizontal: 20, marginBottom: showRateCard ? 10 : 16 }}
         >
           <View
             style={{
@@ -1942,7 +1967,7 @@ export default function HomeScreen() {
         {isToday && (
           <Animated.View
             entering={FadeInDown.delay(70)}
-            style={{ paddingHorizontal: 20, marginBottom: 18 }}
+            style={{ paddingHorizontal: 20, marginBottom: 14 }}
           >
             <Text
               style={{
@@ -1961,63 +1986,66 @@ export default function HomeScreen() {
                 borderRadius: 18,
                 borderWidth: 1,
                 borderColor: C.border,
-                padding: 18,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 14,
+                gap: 12,
               }}
             >
               <View
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
                   backgroundColor: "#30280E",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Flame size={22} color="#F4D35E" strokeWidth={1.8} />
+                <Flame size={19} color="#F4D35E" strokeWidth={1.8} />
               </View>
               <View style={{ flex: 1 }}>
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "baseline",
-                    gap: 6,
+                    gap: 5,
                   }}
                 >
                   <Text
-                    style={{ fontFamily: F.xbold, fontSize: 28, color: "#F4D35E" }}
+                    style={{ fontFamily: F.xbold, fontSize: 24, color: "#F4D35E" }}
                   >
                     {streak}
                   </Text>
                   <Text
                     style={{
                       fontFamily: F.med,
-                      fontSize: 14,
+                      fontSize: 13,
                       color: C.textSec,
                     }}
                   >
                     day streak
                   </Text>
                 </View>
-                <Text
-                  style={{
-                    fontFamily: F.reg,
-                    fontSize: 12,
-                    color: C.textSec,
-                    marginTop: 2,
-                    lineHeight: 18,
-                  }}
-                >
-                  {message}
-                </Text>
+                {message ? (
+                  <Text
+                    style={{
+                      fontFamily: F.reg,
+                      fontSize: 11,
+                      color: C.textSec,
+                      marginTop: 1,
+                      lineHeight: 16,
+                    }}
+                  >
+                    {message}
+                  </Text>
+                ) : null}
               </View>
               <View
                 style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
                   backgroundColor: completedCount === 5 ? `${C.accent}15` : C.cardAlt,
                   borderRadius: 999,
                   borderWidth: 1,
@@ -2027,7 +2055,7 @@ export default function HomeScreen() {
                 <Text
                   style={{
                     fontFamily: F.semi,
-                    fontSize: 13,
+                    fontSize: 12,
                     color: completedCount === 5 ? C.accent : C.textSec,
                   }}
                 >

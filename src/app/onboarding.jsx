@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Search,
   X,
+  Landmark,
 } from "lucide-react-native";
 import { searchPlaces, getTimezoneOffset } from "@/utils/locationSearch";
 import usePrayerStore from "@/store/prayerStore";
@@ -228,7 +229,7 @@ export default function OnboardingScreen() {
                 marginBottom: 32,
               }}
             >
-              <Text style={{ fontSize: 36 }}>🕌</Text>
+              <Landmark size={34} color={C.accent} strokeWidth={2} />
             </View>
             <Text
               style={{

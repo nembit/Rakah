@@ -29,17 +29,27 @@ import {
   ChevronRight,
   Navigation,
   Globe,
+  Clock,
   User,
   Search,
   X,
   Star,
   MessageCircle,
+  Trash2,
 } from "lucide-react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as StoreReview from "expo-store-review";
+import * as DocumentPicker from "expo-document-picker";
+import {
+  cacheDirectory,
+  documentDirectory,
+  EncodingType,
+  writeAsStringAsync,
+  readAsStringAsync,
+} from "expo-file-system";
 import usePrayerStore from "@/store/prayerStore";
 import { getMethods } from "@/utils/prayerTimes";
 import { searchPlaces, getTimezoneOffset } from "@/utils/locationSearch";
@@ -334,13 +344,12 @@ function LocationModal({ visible, current, onClose, onSave }) {
                 borderTopLeftRadius: 28,
                 borderTopRightRadius: 28,
                 paddingBottom: 40,
-                maxHeight: "90%",
               }}
             >
               <ScrollView
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ padding: 24 }}
+                contentContainerStyle={{ padding: 24, paddingBottom: 56 }}
               >
                 <View style={{ width: 36, height: 4, backgroundColor: C.border, borderRadius: 2, alignSelf: "center", marginBottom: 20 }} />
                 <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.text, textAlign: "center", marginBottom: 20 }}>
@@ -494,16 +503,141 @@ function LocationModal({ visible, current, onClose, onSave }) {
   );
 }
 
+function ImportDataModal({
+  visible,
+  onClose,
+  importText,
+  onChangeImportText,
+  onPickFile,
+  onImport,
+  importing,
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", padding: 20 }}
+        onPress={onClose}
+      >
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <View
+            style={{
+              backgroundColor: C.card,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: C.border,
+              padding: 18,
+            }}
+          >
+            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.text, marginBottom: 10 }}>
+              Import Data
+            </Text>
+            <Text style={{ fontFamily: F.reg, fontSize: 12, color: C.textSec, marginBottom: 14, lineHeight: 18 }}>
+              Restore from a JSON backup exported from Rakah.
+            </Text>
+
+            <TouchableOpacity
+              onPress={onPickFile}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: C.border,
+                backgroundColor: C.cardAlt,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              <Upload size={16} color={C.textSec} strokeWidth={1.8} />
+              <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.text }}>
+                Pick a backup file
+              </Text>
+            </TouchableOpacity>
+
+            <TextInput
+              value={importText}
+              onChangeText={onChangeImportText}
+              placeholder="…or paste your JSON backup here"
+              placeholderTextColor={C.textDim}
+              multiline
+              textAlignVertical="top"
+              style={{
+                height: 170,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: C.border,
+                backgroundColor: C.bg,
+                padding: 12,
+                color: C.text,
+                fontFamily: F.reg,
+                fontSize: 12,
+              }}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                onPress={onClose}
+                disabled={importing}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  backgroundColor: "transparent",
+                }}
+              >
+                <Text style={{ fontFamily: F.semi, fontSize: 13, color: importing ? C.textDim : C.textSec }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onImport}
+                disabled={importing}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: importing ? C.border : C.accentDim,
+                  backgroundColor: importing ? C.cardAlt : C.accent,
+                }}
+              >
+                {importing ? (
+                  <ActivityIndicator size="small" color="#0F1117" />
+                ) : (
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: "#0F1117" }}>
+                    Import
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const settings = usePrayerStore((s) => s.settings);
   const updateSettings = usePrayerStore((s) => s.updateSettings);
   const updateLocation = usePrayerStore((s) => s.updateLocation);
   const exportData = usePrayerStore((s) => s.exportData);
+  const importData = usePrayerStore((s) => s.importData);
+  const clearAllData = usePrayerStore((s) => s.clearAllData);
 
   const [methodModal, setMethodModal] = useState(false);
   const [locationModal, setLocationModal] = useState(false);
   const [support, setSupport] = useState(false);
+  const [importModal, setImportModal] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const requestNotificationPermissionIfNeeded = async () => {
     try {
@@ -540,10 +674,124 @@ export default function SettingsScreen() {
   const handleExport = async () => {
     const json = await exportData();
     try {
-      await Share.share({ message: json, title: "Rakah Data Export" });
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `rakah-backup-${dateStr}.json`;
+
+      if (Platform.OS === "web") {
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      const dir = cacheDirectory || documentDirectory;
+      const fileUri = `${dir}${filename}`;
+      await writeAsStringAsync(fileUri, json, {
+        encoding: EncodingType.UTF8,
+      });
+
+      await Share.share({
+        title: "Rakah Data Export",
+        message: "Rakah backup attached.",
+        url: fileUri,
+      });
     } catch (e) {
       Alert.alert("Export", "Could not share data.");
     }
+  };
+
+  const handlePickImportFile = async () => {
+    try {
+      if (Platform.OS === "web") {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "application/json,.json,.txt";
+        input.onchange = () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const text = typeof reader.result === "string" ? reader.result : "";
+            setImportText(text);
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+        return;
+      }
+
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ["application/json", "text/plain"],
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (!asset?.uri) return;
+      const text = await readAsStringAsync(asset.uri, {
+        encoding: EncodingType.UTF8,
+      });
+      setImportText(text);
+    } catch {
+      Alert.alert("Import", "Could not read the selected file.");
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importText.trim()) {
+      Alert.alert("Import", "Paste JSON or pick a backup file first.");
+      return;
+    }
+    Alert.alert(
+      "Import backup?",
+      "This will overwrite your current prayer logs, Qada counts, and settings on this device.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Import",
+          style: "destructive",
+          onPress: async () => {
+            setImporting(true);
+            const res = await importData(importText);
+            setImporting(false);
+            if (res?.success) {
+              setImportText("");
+              setImportModal(false);
+              Alert.alert("Import", "Imported successfully.");
+            } else {
+              Alert.alert("Import failed", res?.error || "Invalid JSON backup.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleClearAllData = () => {
+    Alert.alert(
+      "Clear all app data?",
+      "This will permanently remove prayer logs, Qada data, settings, and local backups in app storage. You can import a backup afterward if needed.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear All",
+          style: "destructive",
+          onPress: async () => {
+            const res = await clearAllData();
+            if (res?.success) {
+              Alert.alert("Data cleared", "All local app data has been removed.");
+            } else {
+              Alert.alert("Could not clear data", res?.error || "Please try again.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleRateApp = async () => {
@@ -618,6 +866,15 @@ export default function SettingsScreen() {
         onClose={() => setLocationModal(false)}
         onSave={updateLocation}
       />
+      <ImportDataModal
+        visible={importModal}
+        onClose={() => setImportModal(false)}
+        importText={importText}
+        onChangeImportText={setImportText}
+        onPickFile={handlePickImportFile}
+        onImport={handleImport}
+        importing={importing}
+      />
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
@@ -687,6 +944,20 @@ export default function SettingsScreen() {
               onPress={() => setLocationModal(true)}
               right={
                 <ChevronRight size={16} color={C.textDim} strokeWidth={1.8} />
+              }
+              noBorder={false}
+            />
+            <SettingRow
+              icon={Clock}
+              label="24-hour time"
+              subtitle={settings.use24HourTime ? "On" : "Off"}
+              right={
+                <Switch
+                  value={!!settings.use24HourTime}
+                  onValueChange={(v) => updateSettings({ use24HourTime: v })}
+                  trackColor={{ false: C.cardAlt, true: C.accentDim }}
+                  thumbColor={settings.use24HourTime ? C.accent : C.textDim}
+                />
               }
               noBorder
             />
@@ -902,14 +1173,19 @@ export default function SettingsScreen() {
               icon={Upload}
               label="Import Data"
               subtitle="Restore from a backup"
-              onPress={() =>
-                Alert.alert(
-                  "Import",
-                  "To import, paste your JSON backup into the text field. This feature requires a file picker — coming soon!",
-                )
-              }
+              onPress={() => setImportModal(true)}
               right={
                 <ChevronRight size={16} color={C.textDim} strokeWidth={1.8} />
+              }
+              noBorder={false}
+            />
+            <SettingRow
+              icon={Trash2}
+              label="Clear All Data"
+              subtitle="Permanently remove all local app data"
+              onPress={handleClearAllData}
+              right={
+                <ChevronRight size={16} color={C.red} strokeWidth={1.8} />
               }
               noBorder
             />

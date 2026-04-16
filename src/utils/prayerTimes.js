@@ -57,13 +57,16 @@ function hourAngle(lat, dec, angle) {
   return toDeg(Math.acos(cosHA)) / 15;
 }
 
-function formatTime(hours) {
+function formatTime(hours, use24HourTime = false) {
   if (hours === null || isNaN(hours)) return "--:--";
   // Normalize to 0–24
   const h = ((hours % 24) + 24) % 24;
   const totalMinutes = Math.round(h * 60);
   const hh = Math.floor(totalMinutes / 60) % 24;
   const mm = totalMinutes % 60;
+  if (use24HourTime) {
+    return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+  }
   const period = hh < 12 ? "AM" : "PM";
   const displayH = hh % 12 === 0 ? 12 : hh % 12;
   return `${displayH}:${mm.toString().padStart(2, "0")} ${period}`;
@@ -75,6 +78,7 @@ export function calculatePrayerTimes(
   longitude,
   timezoneOffset,
   method = "ISNA",
+  use24HourTime = false,
 ) {
   const { fajrAngle, ishaAngle } = METHODS[method] || METHODS.ISNA;
 
@@ -116,13 +120,13 @@ export function calculatePrayerTimes(
   const isha = ishaHA !== null ? solarNoon + ishaHA : null;
 
   return {
-    Fajr: { time: fajr, formatted: formatTime(fajr) },
-    Sunrise: { time: sunrise, formatted: formatTime(sunrise) },
-    Dhuhr: { time: dhuhr, formatted: formatTime(dhuhr) },
-    Asr: { time: asr, formatted: formatTime(asr) },
-    Maghrib: { time: maghrib, formatted: formatTime(maghrib) },
-    Sunset: { time: sunset, formatted: formatTime(sunset) },
-    Isha: { time: isha, formatted: formatTime(isha) },
+    Fajr: { time: fajr, formatted: formatTime(fajr, use24HourTime) },
+    Sunrise: { time: sunrise, formatted: formatTime(sunrise, use24HourTime) },
+    Dhuhr: { time: dhuhr, formatted: formatTime(dhuhr, use24HourTime) },
+    Asr: { time: asr, formatted: formatTime(asr, use24HourTime) },
+    Maghrib: { time: maghrib, formatted: formatTime(maghrib, use24HourTime) },
+    Sunset: { time: sunset, formatted: formatTime(sunset, use24HourTime) },
+    Isha: { time: isha, formatted: formatTime(isha, use24HourTime) },
   };
 }
 

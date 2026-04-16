@@ -1,11 +1,19 @@
-import type {
-  NotificationRequest,
-  PermissionResponse,
-} from "expo-notifications/src/Notifications.types";
-import type { NotificationHandler } from "expo-notifications/src/NotificationsHandler";
 import { toast } from "sonner-native";
-import * as Notifications from "expo-notifications";
-const { PermissionStatus } = Notifications;
+
+type NotificationRequest = any;
+type NotificationHandler = any;
+type PermissionResponse = {
+  status: "granted" | "denied" | "undetermined";
+  expires: "never";
+  granted: boolean;
+  canAskAgain: boolean;
+};
+
+const PermissionStatus = {
+  GRANTED: "granted",
+  DENIED: "denied",
+  UNDETERMINED: "undetermined",
+} as const;
 
 const scheduledNotifications = new Map<
   string,
@@ -26,7 +34,7 @@ export const addNotificationResponseReceivedListener = (
 };
 
 export const removeNotificationSubscription = (
-  subscription: Notifications.Subscription,
+  subscription: any,
 ): void => {
   //no-op
 };
@@ -45,7 +53,7 @@ export const removeNotificationReceivedListener = (
 
 export const setNotificationChannelAsync = (
   channelId: string,
-  channel: Notifications.NotificationChannelInput,
+  channel: any,
 ) => {
   //no-op
 };

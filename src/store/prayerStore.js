@@ -25,6 +25,7 @@ const ALL_SUNNAH = Object.values(SUNNAH_CONFIG).flat();
 
 const DEFAULT_SETTINGS = {
   calcMethod: "ISNA",
+  use24HourTime: false,
   location: {
     type: "auto",
     latitude: 40.7128,
@@ -404,6 +405,10 @@ const usePrayerStore = create((set, get) => ({
               ...DEFAULT_SETTINGS.location,
               ...(data.settings?.location || {}),
             },
+            notifications: {
+              ...DEFAULT_SETTINGS.notifications,
+              ...(data.settings?.notifications || {}),
+            },
           },
           sunnahLogs: data.sunnahLogs || {},
           exemptLogs: data.exemptLogs || {},
@@ -439,15 +444,48 @@ const usePrayerStore = create((set, get) => ({
   importData: async (jsonStr) => {
     try {
       const data = JSON.parse(jsonStr);
+      // Basic shape/version tolerance: allow missing version for older backups
+      if (data && typeof data === "object" && data.version && data.version !== 1) {
+        throw new Error("Unsupported backup version");
+      }
       set({
         prayerLogs: data.prayerLogs || {},
         qdaCounts: { ...DEFAULT_QADA, ...(data.qdaCounts || {}) },
         qdaLog: data.qdaLog || [],
-        settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+        settings: {
+          ...DEFAULT_SETTINGS,
+          ...(data.settings || {}),
+          location: {
+            ...DEFAULT_SETTINGS.location,
+            ...(data.settings?.location || {}),
+          },
+          notifications: {
+            ...DEFAULT_SETTINGS.notifications,
+            ...(data.settings?.notifications || {}),
+          },
+        },
         sunnahLogs: data.sunnahLogs || {},
         exemptLogs: data.exemptLogs || {},
       });
       await get()._persist(get());
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  clearAllData: async () => {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      set({
+        prayerLogs: {},
+        qdaCounts: { ...DEFAULT_QADA },
+        qdaLog: [],
+        settings: { ...DEFAULT_SETTINGS },
+        sunnahLogs: {},
+        exemptLogs: {},
+        isHydrated: true,
+      });
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };

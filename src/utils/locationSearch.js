@@ -2,6 +2,40 @@
  * Location search using the free Nominatim (OpenStreetMap) geocoding API.
  * No API key required. Returns up to 5 results.
  */
+function getSpecificPlaceName(item) {
+  const address = item.address || {};
+  if (typeof item.name === "string" && item.name.trim()) {
+    return item.name.trim();
+  }
+
+  const preferredKeys = [
+    "borough",
+    "suburb",
+    "city_district",
+    "quarter",
+    "neighbourhood",
+    "hamlet",
+    "village",
+    "town",
+    "municipality",
+    "city",
+    "county",
+    "state",
+  ];
+
+  for (const key of preferredKeys) {
+    const value = address[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  const firstDisplayPart = item.display_name?.split(",")[0];
+  return typeof firstDisplayPart === "string" && firstDisplayPart.trim()
+    ? firstDisplayPart.trim()
+    : "Unknown location";
+}
+
 export async function searchPlaces(query) {
   const url =
     `https://nominatim.openstreetmap.org/search` +
@@ -13,15 +47,10 @@ export async function searchPlaces(query) {
   return data.map((item) => ({
     id: String(item.place_id),
     displayName: item.display_name,
-    // Best short name available for the result
-    shortName: (
-      item.address?.city ||
-      item.address?.town ||
-      item.address?.village ||
-      item.address?.county ||
-      item.address?.state ||
-      item.display_name.split(",")[0]
-    ).trim(),
+    // Prefer Nominatim's primary place name first, then fall back to a
+    // specific locality so "Brooklyn, NY" stays Brooklyn without turning
+    // true city matches like "Chicago" into township labels.
+    shortName: getSpecificPlaceName(item),
     country: item.address?.country || "",
     lat: parseFloat(item.lat).toFixed(4),
     lon: parseFloat(item.lon).toFixed(4),
