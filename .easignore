@@ -9,7 +9,11 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native — EAS generates these during build, do not upload
+android/
+ios/
+
+# Native key files
 *.orig.*
 *.jks
 *.p8
@@ -36,3 +40,8 @@ app-example
 
 caches/
 public/
+
+# Dev tooling
+mock-backend/
+.idea/
+.vscode/
