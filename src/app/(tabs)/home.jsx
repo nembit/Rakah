@@ -8,8 +8,8 @@ import {
   Modal,
   Platform,
   Dimensions,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   FadeInDown,
@@ -39,7 +39,7 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import usePrayerStore from "@/store/prayerStore";
+import usePrayerStore, { SUNNAH_CONFIG } from "@/store/prayerStore";
 import { calculatePrayerTimes } from "@/utils/prayerTimes";
 import {
   today,
@@ -249,7 +249,8 @@ function PrayerHorizonVisual({ prayer }) {
     >
       <Image
         source={source}
-        resizeMode="cover"
+        contentFit="cover"
+        contentPosition="bottom"
         style={{ width: "100%", height: "100%", borderRadius: 13 }}
       />
       <View
@@ -387,12 +388,12 @@ function StatusModal({ visible, onClose, prayer, onSelect, currentStatus }) {
   );
 }
 
-function PrayerCard({ prayer, time, status, onTap, onLongPress, index }) {
+function PrayerCard({
+  prayer, time, status, onTap, onLongPress, index,
+  sunnahItems, sunnahLog, onSunnahToggle,
+}) {
   const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-  const prayerIcon = PRAYER_ICON_CONFIG[prayer] || {
-    icon: Clock,
-    color: C.textSec,
-  };
+  const prayerIcon = PRAYER_ICON_CONFIG[prayer] || { icon: Clock, color: C.textSec };
   const PrayerIcon = prayerIcon.icon;
   const scale = useSharedValue(1);
   const shakeX = useSharedValue(0);
@@ -429,15 +430,14 @@ function PrayerCard({ prayer, time, status, onTap, onLongPress, index }) {
     }
   }, [status]);
 
+  const hasSunnah = sunnahItems && sunnahItems.length > 0;
+
   return (
     <Animated.View
       entering={FadeInDown.delay(index * 60).duration(200)}
-      style={animStyle}
+      style={[animStyle, { marginBottom: 12 }]}
     >
-      <TouchableOpacity
-        onPress={handlePress}
-        onLongPress={handleLongPress}
-        activeOpacity={0.8}
+      <View
         style={{
           backgroundColor: sc.bg,
           borderRadius: 18,
@@ -445,65 +445,112 @@ function PrayerCard({ prayer, time, status, onTap, onLongPress, index }) {
           borderColor: sc.border,
           borderLeftWidth: 3,
           borderLeftColor: sc.color,
-          padding: 18,
-          marginBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
+          overflow: "hidden",
         }}
       >
-        <View
+        {/* Fard prayer row */}
+        <TouchableOpacity
+          onPress={handlePress}
+          onLongPress={handleLongPress}
+          activeOpacity={0.8}
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: `${prayerIcon.color}20`,
-            borderWidth: 1,
-            borderColor: `${prayerIcon.color}40`,
+            padding: 18,
+            flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
-            marginRight: 12,
           }}
         >
-          <PrayerIcon size={18} color={prayerIcon.color} strokeWidth={2} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text
+          <View
             style={{
-              fontFamily: F.bold,
-              fontSize: 19,
-              color: C.text,
-              marginBottom: 3,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: `${prayerIcon.color}20`,
+              borderWidth: 1,
+              borderColor: `${prayerIcon.color}40`,
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 12,
             }}
           >
-            {prayer}
-          </Text>
-          <Text style={{ fontFamily: F.med, fontSize: 13, color: C.textSec }}>
-            {time}
-          </Text>
-        </View>
-        <View
-          style={{
-            paddingHorizontal: 14,
-            paddingVertical: 7,
-            backgroundColor: `${sc.color}18`,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: `${sc.color}35`,
-          }}
-        >
-          <Text style={{ fontFamily: F.semi, fontSize: 12, color: sc.color }}>
-            {sc.label}
-          </Text>
-        </View>
-      </TouchableOpacity>
+            <PrayerIcon size={18} color={prayerIcon.color} strokeWidth={2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 19, color: C.text, marginBottom: 3 }}>
+              {prayer}
+            </Text>
+            <Text style={{ fontFamily: F.med, fontSize: 13, color: C.textSec }}>
+              {time}
+            </Text>
+          </View>
+          <View
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 7,
+              backgroundColor: `${sc.color}18`,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: `${sc.color}35`,
+            }}
+          >
+            <Text style={{ fontFamily: F.semi, fontSize: 12, color: sc.color }}>
+              {sc.label}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Sunnah section */}
+        {hasSunnah && (
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: `${C.border}`,
+              paddingHorizontal: 18,
+              paddingVertical: 10,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+            }}
+          >
+            {sunnahItems.map(({ key, label }) => {
+              const prayed = sunnahLog?.[key] === "prayed";
+              return (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => onSunnahToggle(key, prayed ? null : "prayed")}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    backgroundColor: prayed ? `${C.accent}18` : C.cardAlt,
+                    borderWidth: 1,
+                    borderColor: prayed ? `${C.accent}40` : C.border,
+                  }}
+                >
+                  {prayed && <Check size={10} color={C.accent} strokeWidth={3} />}
+                  <Text style={{ fontFamily: F.semi, fontSize: 11, color: prayed ? C.accent : C.textSec }}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </View>
     </Animated.View>
   );
 }
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { setPrayerStatus, getDayLog, settings, getStreak, adjustQada } =
-    usePrayerStore();
+  const {
+    setPrayerStatus, getDayLog, settings, getStreak, adjustQada,
+    getDaySunnahLog, setSunnahStatus,
+  } = usePrayerStore();
   const prayerLogs = usePrayerStore((s) => s.prayerLogs);
 
   const [selectedDate, setSelectedDate] = useState(today());
@@ -548,10 +595,65 @@ export default function HomeScreen() {
   }, [streak]);
 
   useEffect(() => {
-    if (!isToday) return;
     const id = setInterval(() => setNowTick(Date.now()), 30000);
     return () => clearInterval(id);
-  }, [isToday]);
+  }, []);
+
+  useEffect(() => {
+    const now = new Date(nowTick);
+    const nowHours =
+      now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    const todayStr = today();
+    const yesterdayStr = subtractDays(todayStr, 1);
+
+    const { latitude, longitude, timezone } = settings.location;
+    let todayTimes;
+
+    try {
+      todayTimes = calculatePrayerTimes(
+        now,
+        latitude,
+        longitude,
+        timezone,
+        settings.calcMethod,
+      );
+    } catch (e) {
+      return;
+    }
+
+    const endedPrayerTimes = {
+      Fajr: todayTimes.Dhuhr?.time,
+      Dhuhr: todayTimes.Asr?.time,
+      Asr: todayTimes.Maghrib?.time,
+      Maghrib: todayTimes.Isha?.time,
+    };
+
+    const toMissToday = ["Fajr", "Dhuhr", "Asr", "Maghrib"].filter(
+      (prayer) => {
+        const status = prayerLogs[todayStr]?.[prayer] || "pending";
+        const endTime = endedPrayerTimes[prayer];
+        return (
+          status === "pending" &&
+          typeof endTime === "number" &&
+          nowHours >= endTime
+        );
+      },
+    );
+
+    toMissToday.forEach((prayer) => {
+      setPrayerStatus(todayStr, prayer, "missed");
+    });
+
+    const yesterdayIshaStatus = prayerLogs[yesterdayStr]?.Isha || "pending";
+    const todayFajrTime = todayTimes.Fajr?.time;
+    if (
+      yesterdayIshaStatus === "pending" &&
+      typeof todayFajrTime === "number" &&
+      nowHours >= todayFajrTime
+    ) {
+      setPrayerStatus(yesterdayStr, "Isha", "missed");
+    }
+  }, [nowTick, prayerLogs, setPrayerStatus, settings]);
 
   const prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
 
@@ -605,6 +707,9 @@ export default function HomeScreen() {
     if (selectedDate < today()) setSelectedDate(addDays(selectedDate, 1));
   };
 
+  const sunnahTracking = settings.sunnahTracking;
+  const daySunnahLog = getDaySunnahLog(selectedDate);
+
   const completedCount = prayers.filter((p) => {
     const s = dayLog[p];
     return s === "on-time" || s === "late";
@@ -625,6 +730,12 @@ export default function HomeScreen() {
     if (Platform.OS !== "web") {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+
+    if (isCurrentPrayerPrayed) {
+      setPrayerStatus(selectedDate, currentPrayerInfo.currentPrayer, "pending");
+      return;
+    }
+
     const now = new Date(nowTick);
     const nowHours =
       now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
@@ -861,7 +972,6 @@ export default function HomeScreen() {
 
               <TouchableOpacity
                 onPress={handleSetCurrentPrayed}
-                disabled={isCurrentPrayerPrayed}
                 style={{
                   marginTop: 12,
                   paddingVertical: 10,
@@ -873,11 +983,19 @@ export default function HomeScreen() {
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Check
-                    size={14}
-                    color={isCurrentPrayerPrayed ? C.textSec : "#0F1117"}
-                    strokeWidth={2.4}
-                  />
+                  {isCurrentPrayerPrayed ? (
+                    <Minus
+                      size={14}
+                      color={C.textSec}
+                      strokeWidth={2.4}
+                    />
+                  ) : (
+                    <Check
+                      size={14}
+                      color="#0F1117"
+                      strokeWidth={2.4}
+                    />
+                  )}
                   <Text
                     style={{
                       fontFamily: F.semi,
@@ -886,11 +1004,75 @@ export default function HomeScreen() {
                     }}
                   >
                     {isCurrentPrayerPrayed
-                      ? "Marked as prayed"
+                      ? "Unmark prayed"
                       : "Mark as prayed"}
                   </Text>
                 </View>
               </TouchableOpacity>
+
+              {/* Sunnah section for current prayer */}
+              {sunnahTracking &&
+                SUNNAH_CONFIG[currentPrayerInfo.currentPrayer]?.length > 0 && (
+                <View
+                  style={{
+                    marginTop: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: C.border,
+                    paddingTop: 12,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {SUNNAH_CONFIG[currentPrayerInfo.currentPrayer].map(({ key, label }) => {
+                      const prayed = daySunnahLog[key] === "prayed";
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          onPress={() =>
+                            setSunnahStatus(selectedDate, key, prayed ? null : "prayed")
+                          }
+                          activeOpacity={0.7}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: 12,
+                            backgroundColor: prayed ? C.cardAlt : C.accent,
+                            borderWidth: 1,
+                            borderColor: prayed ? C.border : C.accentDim,
+                            flex: 1,
+                            justifyContent: "center",
+                          }}
+                        >
+                          {prayed ? (
+                            <Minus
+                              size={12}
+                              color={C.textSec}
+                              strokeWidth={2.5}
+                            />
+                          ) : (
+                            <Check
+                              size={12}
+                              color="#0F1117"
+                              strokeWidth={2.5}
+                            />
+                          )}
+                          <Text
+                            style={{
+                              fontFamily: F.semi,
+                              fontSize: 12,
+                              color: prayed ? C.textSec : "#0F1117",
+                            }}
+                          >
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
           </Animated.View>
         )}
@@ -918,12 +1100,12 @@ export default function HomeScreen() {
                   width: 48,
                   height: 48,
                   borderRadius: 24,
-                  backgroundColor: "#2A1F0A",
+                  backgroundColor: "#30280E",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Flame size={22} color={C.gold} strokeWidth={1.8} />
+                <Flame size={22} color="#F4D35E" strokeWidth={1.8} />
               </View>
               <View style={{ flex: 1 }}>
                 <View
@@ -934,7 +1116,7 @@ export default function HomeScreen() {
                   }}
                 >
                   <Text
-                    style={{ fontFamily: F.xbold, fontSize: 28, color: C.gold }}
+                    style={{ fontFamily: F.xbold, fontSize: 28, color: "#F4D35E" }}
                   >
                     {streak}
                   </Text>
@@ -1041,6 +1223,11 @@ export default function HomeScreen() {
               onTap={() => handlePrayerTap(prayer)}
               onLongPress={() => handlePrayerLongPress(prayer)}
               index={i}
+              sunnahItems={sunnahTracking ? SUNNAH_CONFIG[prayer] : undefined}
+              sunnahLog={sunnahTracking ? daySunnahLog : undefined}
+              onSunnahToggle={sunnahTracking
+                ? (key, status) => setSunnahStatus(selectedDate, key, status)
+                : undefined}
             />
           ))}
         </View>

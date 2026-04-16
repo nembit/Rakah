@@ -206,11 +206,14 @@ export default function StatsScreen() {
   const getBestStreak = usePrayerStore((s) => s.getBestStreak);
   const getWeeklyConsistency = usePrayerStore((s) => s.getWeeklyConsistency);
   const getStats = usePrayerStore((s) => s.getStats);
+  const sunnahTracking = usePrayerStore((s) => s.settings.sunnahTracking);
+  const getSunnahStats = usePrayerStore((s) => s.getSunnahStats);
 
   const streak = getStreak();
   const bestStreak = getBestStreak();
   const weeklyPct = getWeeklyConsistency();
   const { mostMissed, bestPrayer, overallConsistency } = getStats();
+  const sunnahStats = sunnahTracking ? getSunnahStats() : null;
 
   const prayerStats = useMemo(() => {
     return PRAYERS.map((prayer) => {
@@ -411,6 +414,105 @@ export default function StatsScreen() {
             delay={120}
           />
         </View>
+
+        {/* Sunnah consistency */}
+        {sunnahTracking && sunnahStats !== null && (
+          <Animated.View
+            entering={FadeInDown.delay(150)}
+            style={{
+              marginHorizontal: 20,
+              backgroundColor: C.card,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: C.border,
+              padding: 20,
+              marginBottom: 16,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.textSec }}>
+                SUNNAH PRAYERS
+              </Text>
+              <View
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 999,
+                  backgroundColor: `${C.teal}15`,
+                  borderWidth: 1,
+                  borderColor: `${C.teal}35`,
+                }}
+              >
+                <Text style={{ fontFamily: F.semi, fontSize: 12, color: C.teal }}>
+                  Optional
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: C.cardAlt,
+                  borderRadius: 14,
+                  padding: 14,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: C.border,
+                }}
+              >
+                <Text style={{ fontFamily: F.xbold, fontSize: 28, color: C.teal, letterSpacing: -1 }}>
+                  {sunnahStats.prayed}
+                </Text>
+                <Text style={{ fontFamily: F.reg, fontSize: 12, color: C.textSec, marginTop: 2 }}>
+                  prayed
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: C.cardAlt,
+                  borderRadius: 14,
+                  padding: 14,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: C.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: F.xbold,
+                    fontSize: 28,
+                    letterSpacing: -1,
+                    color: sunnahStats.pct >= 70 ? C.accent : sunnahStats.pct >= 40 ? C.gold : C.textSec,
+                  }}
+                >
+                  {sunnahStats.pct}%
+                </Text>
+                <Text style={{ fontFamily: F.reg, fontSize: 12, color: C.textSec, marginTop: 2 }}>
+                  consistency
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: C.cardAlt,
+                  borderRadius: 14,
+                  padding: 14,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: C.border,
+                }}
+              >
+                <Text style={{ fontFamily: F.xbold, fontSize: 28, color: C.textSec, letterSpacing: -1 }}>
+                  {sunnahStats.total}
+                </Text>
+                <Text style={{ fontFamily: F.reg, fontSize: 12, color: C.textSec, marginTop: 2 }}>
+                  opportunities
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Prayer breakdown */}
         <Animated.View

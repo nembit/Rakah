@@ -125,7 +125,7 @@ function AnimatedCounter({ value }) {
         style={{
           fontFamily: F.xbold,
           fontSize: 28,
-          color: value === 0 ? C.accent : C.qadaWarmYellow,
+          color: value === 0 ? C.accent : C.qadaDarkBlue,
           minWidth: 44,
           textAlign: "center",
         }}
@@ -653,7 +653,7 @@ export default function QadaScreen() {
               style={{
                 fontFamily: F.xbold,
                 fontSize: 52,
-                color: C.qadaWarmYellow,
+                color: C.qadaDarkBlue,
                 letterSpacing: -2,
               }}
             >
@@ -674,7 +674,7 @@ export default function QadaScreen() {
               style={{
                 fontFamily: F.bold,
                 fontSize: 28,
-                color: C.qadaDarkBlue,
+                color: C.qadaWarmYellow,
                 marginTop: 8,
               }}
             >

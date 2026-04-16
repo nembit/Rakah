@@ -17,7 +17,7 @@ import {
   X,
   Minus,
 } from "lucide-react-native";
-import usePrayerStore from "@/store/prayerStore";
+import usePrayerStore, { SUNNAH_CONFIG } from "@/store/prayerStore";
 import {
   today,
   getMonthDays,
@@ -74,7 +74,7 @@ function getDayScore(log) {
   return "missed";
 }
 
-function DayDetailModal({ dateStr, log, visible, onClose, onSetStatus }) {
+function DayDetailModal({ dateStr, log, sunnahLog, showSunnah, visible, onClose, onSetStatus, onSetSunnah }) {
   if (!dateStr) return null;
   const d = fromDateString(dateStr);
   const label = `${DAY_LABELS[d.getDay()]}, ${getMonthName(d.getMonth())} ${d.getDate()}`;
@@ -135,8 +135,10 @@ function DayDetailModal({ dateStr, log, visible, onClose, onSetStatus }) {
             {PRAYERS.map((prayer) => {
               const status = log?.[prayer] || "pending";
               const sc = STATUS_CONFIG[status];
+              const sunnahItems = showSunnah ? (SUNNAH_CONFIG[prayer] || []) : [];
               return (
-                <View key={prayer} style={{ marginBottom: 12 }}>
+                <View key={prayer} style={{ marginBottom: 14 }}>
+                  {/* Fard row */}
                   <View
                     style={{
                       flexDirection: "row",
@@ -163,13 +165,7 @@ function DayDetailModal({ dateStr, log, visible, onClose, onSetStatus }) {
                         borderRadius: 999,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontFamily: F.semi,
-                          fontSize: 11,
-                          color: sc.color,
-                        }}
-                      >
+                      <Text style={{ fontFamily: F.semi, fontSize: 11, color: sc.color }}>
                         {status === "on-time"
                           ? "On Time"
                           : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -190,9 +186,7 @@ function DayDetailModal({ dateStr, log, visible, onClose, onSetStatus }) {
                             status === opt.key ? `${opt.color}25` : C.cardAlt,
                           borderWidth: 1,
                           borderColor:
-                            status === opt.key
-                              ? `${opt.color}50`
-                              : "transparent",
+                            status === opt.key ? `${opt.color}50` : "transparent",
                         }}
                       >
                         <Text
@@ -207,6 +201,49 @@ function DayDetailModal({ dateStr, log, visible, onClose, onSetStatus }) {
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  {/* Sunnah toggles */}
+                  {sunnahItems.length > 0 && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: 6,
+                        marginTop: 8,
+                        paddingLeft: 4,
+                      }}
+                    >
+                      <Text style={{ fontFamily: F.reg, fontSize: 11, color: C.textDim, alignSelf: "center", marginRight: 2 }}>
+                        Sunnah:
+                      </Text>
+                      {sunnahItems.map(({ key, label: sLabel }) => {
+                        const prayed = sunnahLog?.[key] === "prayed";
+                        return (
+                          <TouchableOpacity
+                            key={key}
+                            onPress={() => onSetSunnah(dateStr, key, prayed ? null : "prayed")}
+                            activeOpacity={0.7}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 999,
+                              backgroundColor: prayed ? `${C.accent}18` : C.cardAlt,
+                              borderWidth: 1,
+                              borderColor: prayed ? `${C.accent}40` : C.border,
+                            }}
+                          >
+                            {prayed && <Check size={10} color={C.accent} strokeWidth={3} />}
+                            <Text style={{ fontFamily: F.semi, fontSize: 11, color: prayed ? C.accent : C.textSec }}>
+                              {sLabel}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -220,9 +257,7 @@ function DayDetailModal({ dateStr, log, visible, onClose, onSetStatus }) {
                 alignItems: "center",
               }}
             >
-              <Text
-                style={{ fontFamily: F.semi, fontSize: 15, color: C.textSec }}
-              >
+              <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.textSec }}>
                 Done
               </Text>
             </TouchableOpacity>
@@ -238,6 +273,9 @@ export default function TrackScreen() {
   const prayerLogs = usePrayerStore((s) => s.prayerLogs);
   const setPrayerStatus = usePrayerStore((s) => s.setPrayerStatus);
   const adjustQada = usePrayerStore((s) => s.adjustQada);
+  const sunnahTracking = usePrayerStore((s) => s.settings.sunnahTracking);
+  const getDaySunnahLog = usePrayerStore((s) => s.getDaySunnahLog);
+  const setSunnahStatus = usePrayerStore((s) => s.setSunnahStatus);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -311,9 +349,12 @@ export default function TrackScreen() {
       <DayDetailModal
         dateStr={selectedDate}
         log={selectedDate ? prayerLogs[selectedDate] : null}
+        sunnahLog={selectedDate ? getDaySunnahLog(selectedDate) : null}
+        showSunnah={sunnahTracking}
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onSetStatus={handleSetStatus}
+        onSetSunnah={setSunnahStatus}
       />
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}

@@ -5,6 +5,21 @@ import { PRAYER_NAMES } from "../utils/prayerTimes";
 
 const STORAGE_KEY = "rakah-v1";
 
+// Sunnah muakkadah prayers associated with each fard prayer.
+// status per key: 'prayed' | null (null = not logged / pending)
+export const SUNNAH_CONFIG = {
+  Fajr:    [{ key: "Fajr_pre",     label: "2 Sunnah before", rakah: 2 }],
+  Dhuhr:   [
+    { key: "Dhuhr_pre",  label: "4 Sunnah before", rakah: 4 },
+    { key: "Dhuhr_post", label: "2 Sunnah after",  rakah: 2 },
+  ],
+  Asr:     [],
+  Maghrib: [{ key: "Maghrib_post", label: "2 Sunnah after",  rakah: 2 }],
+  Isha:    [{ key: "Isha_post",    label: "2 Sunnah after",  rakah: 2 }],
+};
+
+const ALL_SUNNAH = Object.values(SUNNAH_CONFIG).flat();
+
 const DEFAULT_SETTINGS = {
   calcMethod: "ISNA",
   location: {
@@ -15,11 +30,11 @@ const DEFAULT_SETTINGS = {
     timezone: -4,
   },
   notifications: {
-    Fajr: true,
-    Dhuhr: true,
-    Asr: true,
-    Maghrib: true,
-    Isha: true,
+    Fajr: false,
+    Dhuhr: false,
+    Asr: false,
+    Maghrib: false,
+    Isha: false,
   },
   sunnahTracking: false,
 };
@@ -129,6 +144,7 @@ const usePrayerStore = create((set, get) => ({
   qdaCounts: { ...DEFAULT_QADA },
   qdaLog: [], // [{ prayer, change, total, timestamp }]
   settings: { ...DEFAULT_SETTINGS },
+  sunnahLogs: {}, // { [dateStr]: { [sunnahKey]: 'prayed' | null } }
   isHydrated: false,
 
   // Derived (computed on demand)
@@ -140,6 +156,22 @@ const usePrayerStore = create((set, get) => ({
   getDayLog: (dateStr) => {
     const logs = get().prayerLogs;
     return logs[dateStr] || {};
+  },
+
+  getDaySunnahLog: (dateStr) => get().sunnahLogs[dateStr] || {},
+
+  getSunnahStats: () => {
+    const { sunnahLogs, prayerLogs } = get();
+    const trackedDates = Object.keys(prayerLogs);
+    const total = trackedDates.length * ALL_SUNNAH.length;
+    let prayed = 0;
+    for (const dateStr of trackedDates) {
+      const sLog = sunnahLogs[dateStr] || {};
+      ALL_SUNNAH.forEach(({ key }) => {
+        if (sLog[key] === "prayed") prayed++;
+      });
+    }
+    return { prayed, total, pct: total > 0 ? Math.round((prayed / total) * 100) : 0 };
   },
 
   // Prayer status actions
@@ -177,6 +209,23 @@ const usePrayerStore = create((set, get) => ({
           ? { qdaCounts: newCounts, qdaLog: newLog }
           : {}),
       };
+      get()._persist({ ...state, ...newState });
+      return newState;
+    });
+  },
+
+  // Sunnah actions
+  setSunnahStatus: (dateStr, key, status) => {
+    set((state) => {
+      const dayLog = state.sunnahLogs[dateStr] || {};
+      const newDayLog = { ...dayLog };
+      if (status === null || status === undefined) {
+        delete newDayLog[key];
+      } else {
+        newDayLog[key] = status;
+      }
+      const newSunnahLogs = { ...state.sunnahLogs, [dateStr]: newDayLog };
+      const newState = { sunnahLogs: newSunnahLogs };
       get()._persist({ ...state, ...newState });
       return newState;
     });
@@ -258,6 +307,7 @@ const usePrayerStore = create((set, get) => ({
         qdaCounts: state.qdaCounts,
         qdaLog: state.qdaLog,
         settings: state.settings,
+        sunnahLogs: state.sunnahLogs,
       };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -282,6 +332,7 @@ const usePrayerStore = create((set, get) => ({
               ...(data.settings?.location || {}),
             },
           },
+          sunnahLogs: data.sunnahLogs || {},
           isHydrated: true,
         });
       } else {
@@ -301,6 +352,7 @@ const usePrayerStore = create((set, get) => ({
         qdaCounts: state.qdaCounts,
         qdaLog: state.qdaLog,
         settings: state.settings,
+        sunnahLogs: state.sunnahLogs,
         exportedAt: new Date().toISOString(),
         version: 1,
       },
@@ -317,6 +369,7 @@ const usePrayerStore = create((set, get) => ({
         qdaCounts: { ...DEFAULT_QADA, ...(data.qdaCounts || {}) },
         qdaLog: data.qdaLog || [],
         settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+        sunnahLogs: data.sunnahLogs || {},
       });
       await get()._persist(get());
       return { success: true };

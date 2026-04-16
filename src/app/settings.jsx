@@ -30,6 +30,7 @@ import {
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 import usePrayerStore from "@/store/prayerStore";
 import { getMethods } from "@/utils/prayerTimes";
 
@@ -457,10 +458,34 @@ export default function SettingsScreen() {
   const [locationModal, setLocationModal] = useState(false);
   const [support, setSupport] = useState(false);
 
-  const toggleNotif = (prayer) => {
+  const requestNotificationPermissionIfNeeded = async () => {
+    try {
+      const existing = await Notifications.getPermissionsAsync();
+      if (existing.granted) return true;
+
+      const requested = await Notifications.requestPermissionsAsync();
+      return !!requested.granted;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const toggleNotif = async (prayer) => {
+    const currentlyEnabled = !!settings.notifications?.[prayer];
+    if (!currentlyEnabled) {
+      const granted = await requestNotificationPermissionIfNeeded();
+      if (!granted) {
+        Alert.alert(
+          "Notifications Disabled",
+          "Please allow notification permission to enable prayer reminders.",
+        );
+        return;
+      }
+    }
+
     const newNotif = {
       ...settings.notifications,
-      [prayer]: !settings.notifications[prayer],
+      [prayer]: !currentlyEnabled,
     };
     updateSettings({ notifications: newNotif });
   };
