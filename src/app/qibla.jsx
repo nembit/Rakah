@@ -18,6 +18,7 @@ import {
   computeHeading,
   lowPassAngle,
 } from "@/utils/qibla";
+import { useTabletLayout } from "@/utils/useTabletLayout";
 
 const C = {
   bg: "#0F1117",
@@ -91,6 +92,7 @@ function formatDistance(km) {
 export default function QiblaScreen() {
   const insets = useSafeAreaInsets();
   const location = usePrayerStore((s) => s.settings.location);
+  const { contentStyle } = useTabletLayout();
 
   const qiblaBearing = useMemo(
     () => getQiblaBearing(location.latitude, location.longitude),
@@ -210,13 +212,16 @@ export default function QiblaScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View
-        style={{
-          flex: 1,
-          paddingTop: insets.top + 16,
-          paddingBottom: insets.bottom + 16,
-          paddingHorizontal: 24,
-          alignItems: "center",
-        }}
+        style={[
+          {
+            flex: 1,
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+            paddingHorizontal: 24,
+            alignItems: "center",
+          },
+          contentStyle
+        ]}
       >
         {/* Header */}
         <View

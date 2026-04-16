@@ -43,13 +43,15 @@ export async function cancelPrayerNotifications() {
 }
 
 /**
- * Schedules prayer notifications for today (remaining prayers) and tomorrow.
+ * Schedules prayer notifications for today (remaining prayers only) and tomorrow.
+ * Notifications are ONLY scheduled for prayer times strictly in the future (> 60s away).
+ * They fire exactly when the prayer time arrives — not immediately.
  *
- * @param {object} todayTimes   - { Fajr: { time: number, formatted: string }, ... }
+ * @param {object} todayTimes    - { Fajr: { time: number, formatted: string }, ... }
  * @param {object} tomorrowTimes - same shape for the next calendar day
  * @param {object} notifSettings - { Fajr: bool, Dhuhr: bool, ... }
- * @param {Date}   todayDate    - today's Date (for anchor)
- * @param {Date}   tomorrowDate - tomorrow's Date
+ * @param {Date}   todayDate     - today's Date (for anchor)
+ * @param {Date}   tomorrowDate  - tomorrow's Date
  */
 export async function schedulePrayerNotifications(
   todayTimes,
@@ -58,18 +60,24 @@ export async function schedulePrayerNotifications(
   todayDate,
   tomorrowDate,
 ) {
+  // Always cancel existing prayer notifications before rescheduling.
   await cancelPrayerNotifications();
 
   const now = new Date();
+  // Require the prayer to be at least 60 seconds in the future.
+  // This ensures we never schedule a notification that fires immediately.
+  const MIN_FUTURE_MS = 60 * 1000;
 
   for (const prayer of PRAYER_NAMES) {
     if (!notifSettings?.[prayer]) continue;
 
-    // Today's prayer (only if it hasn't passed yet)
+    // --- Today ---
     const todayFraction = todayTimes[prayer]?.time;
     if (typeof todayFraction === "number") {
       const todayAt = fractionalHourToDate(todayFraction, todayDate);
-      if (todayAt > now) {
+      const msUntilToday = todayAt.getTime() - now.getTime();
+
+      if (msUntilToday > MIN_FUTURE_MS) {
         await Notifications.scheduleNotificationAsync({
           content: {
             title: `🕌 ${prayer}`,
@@ -78,6 +86,8 @@ export async function schedulePrayerNotifications(
             data: { type: "prayer", prayer, day: "today" },
           },
           trigger: {
+            // Explicit DATE trigger type required by expo-notifications 0.32+
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: todayAt,
             channelId: PRAYER_CHANNEL_ID,
           },
@@ -85,11 +95,13 @@ export async function schedulePrayerNotifications(
       }
     }
 
-    // Tomorrow's prayer
+    // --- Tomorrow ---
     const tomorrowFraction = tomorrowTimes?.[prayer]?.time;
     if (typeof tomorrowFraction === "number") {
       const tomorrowAt = fractionalHourToDate(tomorrowFraction, tomorrowDate);
-      if (tomorrowAt > now) {
+      const msUntilTomorrow = tomorrowAt.getTime() - now.getTime();
+
+      if (msUntilTomorrow > MIN_FUTURE_MS) {
         await Notifications.scheduleNotificationAsync({
           content: {
             title: `🕌 ${prayer}`,
@@ -98,6 +110,7 @@ export async function schedulePrayerNotifications(
             data: { type: "prayer", prayer, day: "tomorrow" },
           },
           trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: tomorrowAt,
             channelId: PRAYER_CHANNEL_ID,
           },

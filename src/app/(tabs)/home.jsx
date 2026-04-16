@@ -49,7 +49,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as StoreReview from "expo-store-review";
 import usePrayerStore, { SUNNAH_CONFIG } from "@/store/prayerStore";
-import { calculatePrayerTimes } from "@/utils/prayerTimes";
+import { calculatePrayerTimes, formatTime } from "@/utils/prayerTimes";
 import { schedulePrayerNotifications } from "@/utils/prayerNotifications";
 import {
   today,
@@ -60,8 +60,8 @@ import {
   fromDateString,
   formatHijriDate,
 } from "@/utils/dateUtils";
+import { useTabletLayout } from "@/utils/useTabletLayout";
 
-const { width: SCREEN_W } = Dimensions.get("window");
 
 const C = {
   bg: "#0F1117",
@@ -94,11 +94,6 @@ const STATUS_CONFIG = {
   exempt: { label: "Exempt", color: C.violet, bg: "#1A1030", border: "#4C2D8A" },
 };
 
-const MILESTONES = {
-  3: "Three days strong — keep going! 🌙",
-  7: "A full week! You're building something beautiful. 💫",
-  30: "30 days! Mashallah — a true commitment. ✨",
-};
 const FEEDBACK_EMAIL = "support@rakah.app";
 
 const PRAYER_ICON_CONFIG = {
@@ -132,18 +127,24 @@ function getBannerKeyForNow(prayerTimes, fallbackPrayer, nowDate = new Date()) {
 }
 
 function getCurrentPrayerInfo(prayerTimes, nowDate = new Date()) {
-  const order = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
-  const schedule = order
+  const prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+  const milestones = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha"];
+
+  const prayerSchedule = prayers
     .map((prayer) => ({ prayer, time: prayerTimes[prayer]?.time }))
     .filter((item) => item.time !== null && item.time !== undefined && !isNaN(item.time));
 
-  if (!schedule.length) return null;
+  const fullSchedule = milestones
+    .map((prayer) => ({ prayer, time: prayerTimes[prayer]?.time }))
+    .filter((item) => item.time !== null && item.time !== undefined && !isNaN(item.time));
+
+  if (!prayerSchedule.length) return null;
 
   const nowHours =
     nowDate.getHours() + nowDate.getMinutes() / 60 + nowDate.getSeconds() / 3600;
 
-  let current = schedule[schedule.length - 1];
-  for (const item of schedule) {
+  let current = prayerSchedule[prayerSchedule.length - 1];
+  for (const item of prayerSchedule) {
     if (nowHours >= item.time) {
       current = item;
     } else {
@@ -151,7 +152,7 @@ function getCurrentPrayerInfo(prayerTimes, nowDate = new Date()) {
     }
   }
 
-  const next = schedule.find((item) => item.time > nowHours) || schedule[0];
+  const next = fullSchedule.find((item) => item.time > nowHours) || fullSchedule[0];
 
   const currentTimeValue = current.time;
   const nextTimeValue = next.time;
@@ -172,8 +173,21 @@ function getCurrentPrayerInfo(prayerTimes, nowDate = new Date()) {
   const hoursLeftToNext = Math.max(0, durationHours - elapsedHours);
   const minutesLeftToNext = Math.round(hoursLeftToNext * 60);
 
+  let displayLabel = current.prayer;
+  const sunriseTime = prayerTimes.Sunrise?.time;
+  const dhuhrTime = prayerTimes.Dhuhr?.time;
+  if (
+    current.prayer === "Fajr" &&
+    typeof sunriseTime === "number" &&
+    nowHours >= sunriseTime &&
+    (typeof dhuhrTime !== "number" || nowHours < dhuhrTime)
+  ) {
+    displayLabel = "Fajr (Post-Sunrise)";
+  }
+
   return {
     currentPrayer: current.prayer,
+    displayLabel,
     currentTime: prayerTimes[current.prayer]?.formatted || "--:--",
     nextPrayer: next.prayer,
     nextTime: prayerTimes[next.prayer]?.formatted || "--:--",
@@ -242,10 +256,11 @@ function formatMinutesLeft(totalMinutes) {
   return `${hours}h ${mins}m`;
 }
 
-function PrayerHorizonVisual({ prayer }) {
+function PrayerHorizonVisual({ prayer, currentTime }) {
+  const { contentWidth } = useTabletLayout();
   const accent = (PRAYER_ICON_CONFIG[prayer] || PRAYER_ICON_CONFIG.Fajr).color;
   const source = PRAYER_BANNER_IMAGES[prayer] || PRAYER_BANNER_IMAGES.Fajr;
-  const bannerHeight = Math.round(SCREEN_W / 3);
+  const bannerHeight = Math.round(contentWidth / 3);
 
   return (
     <View
@@ -276,6 +291,30 @@ function PrayerHorizonVisual({ prayer }) {
           borderRadius: 13,
         }}
       />
+      {currentTime && (
+        <View
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            backgroundColor: "rgba(0,0,0,0.3)",
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 7,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: F.bold,
+              fontSize: 12,
+              color: "#FFFFFF",
+              letterSpacing: -0.2,
+            }}
+          >
+            {currentTime}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -858,6 +897,17 @@ function PrayerCard({
   sunnahItems, sunnahLog, onSunnahToggle, isExempt, vibrationsEnabled,
 }) {
   const sc = isExempt ? STATUS_CONFIG.exempt : (STATUS_CONFIG[status] || STATUS_CONFIG.pending);
+  const statusIcon =
+    status === "on-time"
+      ? Check
+      : status === "late"
+        ? Clock
+        : status === "missed"
+          ? X
+          : status === "pending"
+            ? Minus
+          : null;
+  const StatusIcon = statusIcon;
   const prayerIcon = PRAYER_ICON_CONFIG[prayer] || { icon: Clock, color: C.textSec };
   const PrayerIcon = prayerIcon.icon;
   const scale = useSharedValue(1);
@@ -949,17 +999,23 @@ function PrayerCard({
           </View>
           <View
             style={{
-              paddingHorizontal: 14,
-              paddingVertical: 7,
+              width: 32,
+              height: 32,
               backgroundColor: `${sc.color}18`,
-              borderRadius: 999,
+              borderRadius: 16,
               borderWidth: 1,
               borderColor: `${sc.color}35`,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            <Text style={{ fontFamily: F.semi, fontSize: 12, color: sc.color }}>
-              {sc.label}
-            </Text>
+            {StatusIcon ? (
+              <StatusIcon size={14} color={sc.color} strokeWidth={2.2} />
+            ) : (
+              <Text style={{ fontFamily: F.semi, fontSize: 11, color: sc.color }}>
+                {sc.label}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -1017,6 +1073,7 @@ export default function HomeScreen() {
     getDaySunnahLog, setSunnahStatus, getExemptDay, setExemptDay,
   } = usePrayerStore();
   const prayerLogs = usePrayerStore((s) => s.prayerLogs);
+  const { contentStyle } = useTabletLayout();
 
   const [selectedDate, setSelectedDate] = useState(today());
   const [modalVisible, setModalVisible] = useState(false);
@@ -1026,8 +1083,12 @@ export default function HomeScreen() {
   const [reviewFeedback, setReviewFeedback] = useState("");
   const [selectedPrayer, setSelectedPrayer] = useState(null);
   const [times, setTimes] = useState({});
-  const [message, setMessage] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
+  // Session-only dismiss state — cards re-appear on next launch
+  const [supportCardDismissed, setSupportCardDismissed] = useState(false);
+  const [rateCardDismissed, setRateCardDismissed] = useState(false);
+  const supportCardX = useRef(new RNAnimated.Value(0)).current;
+  const rateCardX = useRef(new RNAnimated.Value(0)).current;
   const SUPPORT_TIERS = [
     { key: "one-time", label: "One-time gift", price: "$2.99", desc: "Buy us a coffee" },
     { key: "monthly", label: "Monthly supporter", price: "$0.99/mo", desc: "Keep the lights on" },
@@ -1059,6 +1120,8 @@ export default function HomeScreen() {
 
   // Schedule prayer notifications for today + tomorrow whenever
   // today's times are freshly computed or notification preferences change.
+  // Debounced by 500ms to collapse rapid successive triggers (e.g. times + settings
+  // both updating in the same tick) into a single scheduling call.
   useEffect(() => {
     if (!isToday || Object.keys(times).length === 0) return;
     const notifSettings = settings.notifications;
@@ -1069,39 +1132,49 @@ export default function HomeScreen() {
     const tomorrowDate = new Date(todayDate);
     tomorrowDate.setDate(tomorrowDate.getDate() + 1);
 
-    let tomorrowTimes = {};
-    try {
-      tomorrowTimes = calculatePrayerTimes(
-        tomorrowDate,
-        latitude,
-        longitude,
-        timezone,
-        settings.calcMethod,
-        !!settings.use24HourTime,
-      );
-    } catch {
-      // skip tomorrow if calculation fails
-    }
+    let cancelled = false;
 
-    schedulePrayerNotifications(
-      times, tomorrowTimes, notifSettings, todayDate, tomorrowDate,
-    ).catch(() => {});
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      let tomorrowTimes = {};
+      try {
+        tomorrowTimes = calculatePrayerTimes(
+          tomorrowDate,
+          latitude,
+          longitude,
+          timezone,
+          settings.calcMethod,
+          !!settings.use24HourTime,
+        );
+      } catch {
+        // skip tomorrow if calculation fails
+      }
+      if (!cancelled) {
+        schedulePrayerNotifications(
+          times, tomorrowTimes, notifSettings, todayDate, tomorrowDate,
+        ).catch(() => {});
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [times, settings.notifications, isToday]);
 
   useEffect(() => {
-    if (MILESTONES[streak]) {
-      setMessage(MILESTONES[streak]);
-    } else {
-      setMessage("");
-    }
-  }, [streak]);
-
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 30000);
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
+    // Only auto-miss if the user has ever manually logged at least one prayer.
+    // This prevents a fresh install from marking past prayers as missed immediately.
+    const hasEverLogged = Object.values(prayerLogs).some((entry) =>
+      Object.values(entry).some((s) => s === "on-time" || s === "late"),
+    );
+    if (!hasEverLogged) return;
+
     const now = new Date(nowTick);
     const nowHours =
       now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
@@ -1160,12 +1233,24 @@ export default function HomeScreen() {
 
   const prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
 
+  const isFuturePrayer = (prayer) => {
+    if (!isToday) return false;
+    const prayerTime = times[prayer]?.time;
+    if (typeof prayerTime !== "number") return false;
+    const now = new Date(nowTick);
+    const nowHours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    return prayerTime > nowHours;
+  };
+
   const openModal = (prayer) => {
     setSelectedPrayer(prayer);
     setModalVisible(true);
   };
 
   const handlePrayerTap = (prayer) => {
+    if (isFuturePrayer(prayer)) {
+      return;
+    }
     const currentStatus = dayLog[prayer] || "pending";
     // If pending, mark as on-time directly
     if (currentStatus === "pending") {
@@ -1177,6 +1262,9 @@ export default function HomeScreen() {
   };
 
   const handlePrayerLongPress = (prayer) => {
+    if (isFuturePrayer(prayer)) {
+      return;
+    }
     openModal(prayer);
   };
 
@@ -1254,9 +1342,12 @@ export default function HomeScreen() {
   const isCurrentPrayerPrayed =
     currentPrayerStatus === "on-time" || currentPrayerStatus === "late";
   const currentLocationLabel = settings?.location?.city || "Location not set";
+  // Only count days where the user has manually logged at least one on-time or late prayer.
+  // Days that only have auto-missed prayers (no user interaction) do not count.
   const loggedDaysCount = Object.values(prayerLogs || {}).filter((entry) =>
-    prayers.some((p) => (entry?.[p] || "pending") !== "pending"),
+    prayers.some((p) => entry?.[p] === "on-time" || entry?.[p] === "late"),
   ).length;
+  const showSupportCard = loggedDaysCount >= 4;
   const showRateCard = loggedDaysCount >= 7;
 
   const handleSetCurrentPrayed = () => {
@@ -1390,6 +1481,7 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
         showsVerticalScrollIndicator={false}
       >
+        <View style={contentStyle}>
         {/* Header */}
         <View
           style={{
@@ -1497,6 +1589,13 @@ export default function HomeScreen() {
                   currentPrayerInfo.currentPrayer,
                   new Date(nowTick),
                 )}
+                currentTime={formatTime(
+                  new Date(nowTick).getHours() +
+                    new Date(nowTick).getMinutes() / 60 +
+                    new Date(nowTick).getSeconds() / 3600,
+                  settings.use24HourTime,
+                  true,
+                )}
               />
 
               <View
@@ -1537,30 +1636,25 @@ export default function HomeScreen() {
               <View
                 style={{
                   flexDirection: "row",
-                  alignItems: "baseline",
+                  alignItems: "center",
                   justifyContent: "space-between",
                 }}
               >
-                <Text style={{ fontFamily: F.xbold, fontSize: 24, color: C.text }}>
-                  {currentPrayerInfo.currentPrayer}
-                </Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.text }}>
-                  {currentPrayerInfo.currentTime}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontFamily: F.xbold, fontSize: 24, lineHeight: 28, color: C.text }}>
+                    {currentPrayerInfo.displayLabel}
+                  </Text>
+                  <ChevronRight size={16} color={C.textSec} strokeWidth={2.5} />
+                  <Text style={{ fontFamily: F.bold, fontSize: 19, lineHeight: 28, color: C.textSec }}>
+                    {currentPrayerInfo.nextPrayer}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: F.bold, fontSize: 16, lineHeight: 28, color: C.textSec }}>
+                  {currentPrayerInfo.nextTime}
                 </Text>
               </View>
 
-              <Text
-                style={{
-                  fontFamily: F.reg,
-                  fontSize: 12,
-                  color: C.textSec,
-                  marginTop: 6,
-                }}
-              >
-                Upcoming: {currentPrayerInfo.nextPrayer} at {currentPrayerInfo.nextTime}
-              </Text>
-
-              <View style={{ marginTop: 10 }}>
+              <View style={{ marginTop: 14 }}>
                 <View
                   style={{
                     height: 8,
@@ -1605,7 +1699,7 @@ export default function HomeScreen() {
                         flexShrink: 1,
                       }}
                     >
-                      {formatMinutesLeft(currentPrayerInfo.minutesLeftToNext)} until {currentPrayerInfo.nextPrayer}
+                      {formatMinutesLeft(currentPrayerInfo.minutesLeftToNext)} remaining
                     </Text>
                   </View>
                   <Text
@@ -1642,7 +1736,7 @@ export default function HomeScreen() {
                   onPress={handleSetCurrentPrayed}
                   style={{
                     marginTop: 12,
-                    paddingVertical: 10,
+                    paddingVertical: 14,
                     borderRadius: 12,
                     alignItems: "center",
                     backgroundColor: isCurrentPrayerPrayed ? C.cardAlt : C.accent,
@@ -1736,66 +1830,110 @@ export default function HomeScreen() {
           </Animated.View>
         )}
 
-        <Animated.View
-          entering={FadeInDown.delay(65)}
-          style={{ paddingHorizontal: 20, marginBottom: showRateCard ? 10 : 16 }}
-        >
-          <View
+        {showSupportCard && !supportCardDismissed && (
+          <RNAnimated.View
             style={{
-              backgroundColor: C.card,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: C.border,
-              padding: 14,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
+              paddingHorizontal: 20,
+              marginBottom: showRateCard && !rateCardDismissed ? 10 : 16,
+              transform: [{ translateX: supportCardX }],
             }}
+            {...PanResponder.create({
+              onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8,
+              onPanResponderMove: (_, g) => supportCardX.setValue(g.dx),
+              onPanResponderRelease: (_, g) => {
+                if (Math.abs(g.dx) > 80 || Math.abs(g.vx) > 0.5) {
+                  RNAnimated.timing(supportCardX, {
+                    toValue: g.dx > 0 ? 400 : -400,
+                    duration: 180,
+                    useNativeDriver: true,
+                  }).start(() => setSupportCardDismissed(true));
+                } else {
+                  RNAnimated.spring(supportCardX, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                  }).start();
+                }
+              },
+            }).panHandlers}
           >
             <View
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
-                backgroundColor: `${C.accent}18`,
+                backgroundColor: C.card,
+                borderRadius: 16,
                 borderWidth: 1,
-                borderColor: `${C.accent}35`,
+                borderColor: C.border,
+                padding: 14,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
+                gap: 10,
               }}
             >
-              <Heart size={15} color={C.accent} strokeWidth={2} />
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: `${C.accent}18`,
+                  borderWidth: 1,
+                  borderColor: `${C.accent}35`,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Heart size={15} color={C.accent} strokeWidth={2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.text }}>
+                  Keep Rakah free
+                </Text>
+                <Text style={{ fontFamily: F.reg, fontSize: 11, color: C.textSec, marginTop: 2 }}>
+                  Support the app if it's helping your prayer journey
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleSupportPress}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  backgroundColor: `${C.accent}18`,
+                  borderWidth: 1,
+                  borderColor: `${C.accent}35`,
+                }}
+              >
+                <Text style={{ fontFamily: F.semi, fontSize: 12, color: C.accent }}>
+                  Support
+                </Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.text }}>
-                Keep Rakah free
-              </Text>
-              <Text style={{ fontFamily: F.reg, fontSize: 11, color: C.textSec, marginTop: 2 }}>
-                Support the app if it's helping your prayer journey
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleSupportPress}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 999,
-                backgroundColor: `${C.accent}18`,
-                borderWidth: 1,
-                borderColor: `${C.accent}35`,
-              }}
-            >
-              <Text style={{ fontFamily: F.semi, fontSize: 12, color: C.accent }}>
-                Support
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+          </RNAnimated.View>
+        )}
 
-        {showRateCard && (
-          <Animated.View
-            entering={FadeInDown.delay(75)}
-            style={{ paddingHorizontal: 20, marginBottom: 16 }}
+        {showRateCard && !rateCardDismissed && (
+          <RNAnimated.View
+            style={{
+              paddingHorizontal: 20,
+              marginBottom: 16,
+              transform: [{ translateX: rateCardX }],
+            }}
+            {...PanResponder.create({
+              onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8,
+              onPanResponderMove: (_, g) => rateCardX.setValue(g.dx),
+              onPanResponderRelease: (_, g) => {
+                if (Math.abs(g.dx) > 80 || Math.abs(g.vx) > 0.5) {
+                  RNAnimated.timing(rateCardX, {
+                    toValue: g.dx > 0 ? 400 : -400,
+                    duration: 180,
+                    useNativeDriver: true,
+                  }).start(() => setRateCardDismissed(true));
+                } else {
+                  RNAnimated.spring(rateCardX, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                  }).start();
+                }
+              },
+            }).panHandlers}
           >
             <View
               style={{
@@ -1847,7 +1985,7 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
+          </RNAnimated.View>
         )}
 
         {/* Date Navigator */}
@@ -2028,30 +2166,37 @@ export default function HomeScreen() {
                     day streak
                   </Text>
                 </View>
-                {message ? (
-                  <Text
-                    style={{
-                      fontFamily: F.reg,
-                      fontSize: 11,
-                      color: C.textSec,
-                      marginTop: 1,
-                      lineHeight: 16,
-                    }}
-                  >
-                    {message}
-                  </Text>
-                ) : null}
               </View>
               <View
                 style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
+                  minWidth: 74,
+                  paddingHorizontal: 9,
+                  paddingVertical: 7,
                   backgroundColor: completedCount === 5 ? `${C.accent}15` : C.cardAlt,
-                  borderRadius: 999,
+                  borderRadius: 11,
                   borderWidth: 1,
                   borderColor: completedCount === 5 ? `${C.accent}30` : C.border,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 5,
                 }}
               >
+                <View style={{ flexDirection: "row", gap: 3 }}>
+                  {[0, 1, 2, 3, 4].map((i) => {
+                    const filled = i < completedCount;
+                    return (
+                      <View
+                        key={i}
+                        style={{
+                          width: 9,
+                          height: 5,
+                          borderRadius: 2,
+                          backgroundColor: filled ? C.accent : C.border,
+                        }}
+                      />
+                    );
+                  })}
+                </View>
                 <Text
                   style={{
                     fontFamily: F.semi,
@@ -2059,17 +2204,17 @@ export default function HomeScreen() {
                     color: completedCount === 5 ? C.accent : C.textSec,
                   }}
                 >
-                  {completedCount}/5
+                  {completedCount} of 5
                 </Text>
               </View>
             </View>
           </Animated.View>
         )}
 
-        {/* Prayer Cards */}
         <View style={{ paddingHorizontal: 20 }}>
           {prayers.map((prayer, i) => {
             const prayerExempt = getExemptForPrayer(prayer);
+            const future = isFuturePrayer(prayer);
             return (
               <PrayerCard
                 key={prayer}
@@ -2083,12 +2228,13 @@ export default function HomeScreen() {
                 vibrationsEnabled={settings.vibrations !== false}
                 sunnahItems={sunnahTracking ? SUNNAH_CONFIG[prayer] : undefined}
                 sunnahLog={sunnahTracking ? daySunnahLog : undefined}
-                onSunnahToggle={sunnahTracking
+                onSunnahToggle={sunnahTracking && !future
                   ? (key, status) => setSunnahStatus(selectedDate, key, status)
                   : undefined}
               />
             );
           })}
+        </View>
         </View>
       </ScrollView>
     </View>

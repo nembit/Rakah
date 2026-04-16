@@ -53,6 +53,7 @@ import {
 import usePrayerStore from "@/store/prayerStore";
 import { getMethods } from "@/utils/prayerTimes";
 import { searchPlaces, getTimezoneOffset } from "@/utils/locationSearch";
+import { useTabletLayout } from "@/utils/useTabletLayout";
 
 const C = {
   bg: "#0F1117",
@@ -625,6 +626,7 @@ function ImportDataModal({
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const { contentStyle } = useTabletLayout();
   const settings = usePrayerStore((s) => s.settings);
   const updateSettings = usePrayerStore((s) => s.updateSettings);
   const updateLocation = usePrayerStore((s) => s.updateLocation);
@@ -880,6 +882,7 @@ export default function SettingsScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}
       >
+        <View style={contentStyle}>
         {/* Header */}
         <View
           style={{
@@ -1305,11 +1308,57 @@ export default function SettingsScreen() {
               fontSize: 12,
               color: C.textDim,
               textAlign: "center",
-              marginBottom: 20,
+              marginBottom: 10,
             }}
           >
             Rakah v1.0 · All data stored locally · No account required
           </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 20,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() =>
+                Linking.openURL("https://sites.google.com/view/rakah-privacy-policy/home")
+              }
+              activeOpacity={0.7}
+            >
+              <Text
+                style={{
+                  fontFamily: F.semi,
+                  fontSize: 12,
+                  color: C.textSec,
+                  textDecorationLine: "underline",
+                }}
+              >
+                Privacy Policy
+              </Text>
+            </TouchableOpacity>
+            <Text style={{ fontFamily: F.reg, fontSize: 12, color: C.textDim }}>·</Text>
+            <TouchableOpacity
+              onPress={() =>
+                Linking.openURL("https://sites.google.com/view/rakah-terms-of-service/home")
+              }
+              activeOpacity={0.7}
+            >
+              <Text
+                style={{
+                  fontFamily: F.semi,
+                  fontSize: 12,
+                  color: C.textSec,
+                  textDecorationLine: "underline",
+                }}
+              >
+                Terms of Service
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         </View>
       </ScrollView>
     </View>

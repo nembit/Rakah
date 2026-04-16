@@ -57,19 +57,27 @@ function hourAngle(lat, dec, angle) {
   return toDeg(Math.acos(cosHA)) / 15;
 }
 
-function formatTime(hours, use24HourTime = false) {
+export function formatTime(hours, use24HourTime = false, showSeconds = false) {
   if (hours === null || isNaN(hours)) return "--:--";
   // Normalize to 0–24
   const h = ((hours % 24) + 24) % 24;
-  const totalMinutes = Math.round(h * 60);
-  const hh = Math.floor(totalMinutes / 60) % 24;
-  const mm = totalMinutes % 60;
+  const totalSeconds = Math.round(h * 3600);
+  const hh = Math.floor(totalSeconds / 3600) % 24;
+  const mm = Math.floor((totalSeconds % 3600) / 60);
+  const ss = totalSeconds % 60;
+
+  const mmStr = mm.toString().padStart(2, "0");
+  const ssStr = ss.toString().padStart(2, "0");
+
   if (use24HourTime) {
-    return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+    const hhStr = hh.toString().padStart(2, "0");
+    return showSeconds ? `${hhStr}:${mmStr}:${ssStr}` : `${hhStr}:${mmStr}`;
   }
+
   const period = hh < 12 ? "AM" : "PM";
   const displayH = hh % 12 === 0 ? 12 : hh % 12;
-  return `${displayH}:${mm.toString().padStart(2, "0")} ${period}`;
+  const baseTime = `${displayH}:${mmStr}`;
+  return showSeconds ? `${baseTime}:${ssStr} ${period}` : `${baseTime} ${period}`;
 }
 
 export function calculatePrayerTimes(

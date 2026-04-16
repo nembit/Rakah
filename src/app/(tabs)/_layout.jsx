@@ -18,12 +18,15 @@ function TabIcon({ Icon, color, size, label, focused }) {
     <View style={{ alignItems: "center", justifyContent: "center" }}>
       <Icon size={22} color={color} strokeWidth={focused ? 2.2 : 1.8} />
       <Text
+        numberOfLines={1}
+        ellipsizeMode="clip"
+        allowFontScaling={false}
         style={{
           fontFamily: F,
-          fontSize: 10,
+          fontSize: 9,
           color,
           marginTop: 3,
-          letterSpacing: 0.2,
+          textAlign: "center",
         }}
       >
         {label}

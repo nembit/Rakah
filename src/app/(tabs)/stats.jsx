@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { View, Text, ScrollView, Dimensions } from "react-native";
+import { View, Text, ScrollView, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import {
@@ -12,8 +12,8 @@ import {
 } from "lucide-react-native";
 import usePrayerStore from "@/store/prayerStore";
 import { today, subtractDays, toDateString } from "@/utils/dateUtils";
+import { useTabletLayout } from "@/utils/useTabletLayout";
 
-const { width: SCREEN_W } = Dimensions.get("window");
 const C = {
   bg: "#0F1117",
   card: "#1A1D27",
@@ -157,7 +157,8 @@ function ConsistencyRing({ pct, size = 110 }) {
 }
 
 function PrayerBar({ prayer, pct, color, delay }) {
-  const barWidth = Math.max((pct / 100) * (SCREEN_W - 80), 4);
+  const { contentWidth } = useTabletLayout();
+  const barWidth = Math.max((pct / 100) * (contentWidth - 80), 4);
   return (
     <Animated.View
       entering={FadeInDown.delay(delay).duration(200)}
@@ -201,6 +202,7 @@ function PrayerBar({ prayer, pct, color, delay }) {
 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
+  const { contentStyle, contentWidth } = useTabletLayout();
   const prayerLogs = usePrayerStore((s) => s.prayerLogs);
   const getStreak = usePrayerStore((s) => s.getStreak);
   const getBestStreak = usePrayerStore((s) => s.getBestStreak);
@@ -260,6 +262,7 @@ export default function StatsScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
         showsVerticalScrollIndicator={false}
       >
+        <View style={contentStyle}>
         {/* Header */}
         <View
           style={{
@@ -548,7 +551,7 @@ export default function StatsScreen() {
                 <Text style={{ fontFamily: F.xbold, fontSize: 28, color: C.textSec, letterSpacing: -1 }}>
                   {sunnahStats.total}
                 </Text>
-                <Text style={{ fontFamily: F.reg, fontSize: 12, color: C.textSec, marginTop: 2 }}>
+                <Text style={{ fontFamily: F.reg, fontSize: 11, color: C.textSec, marginTop: 2, textAlign: "center" }} numberOfLines={1} adjustsFontSizeToFit>
                   opportunities
                 </Text>
               </View>
@@ -613,12 +616,12 @@ export default function StatsScreen() {
           >
             28-DAY HEATMAP
           </Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>
+          <View style={{ flexDirection: "row", gap: 5 }}>
             {last28.map(({ d, score }) => (
               <View
                 key={d}
                 style={{
-                  width: (SCREEN_W - 80 - 27 * 5) / 28,
+                  flex: 1,
                   aspectRatio: 1,
                   borderRadius: 3,
                   backgroundColor: heatColors[score],
@@ -693,6 +696,7 @@ export default function StatsScreen() {
             </Text>
           </Animated.View>
         )}
+        </View>
       </ScrollView>
     </View>
   );

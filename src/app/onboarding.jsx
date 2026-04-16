@@ -28,7 +28,9 @@ import {
   Search,
   X,
   Landmark,
+  Crosshair,
 } from "lucide-react-native";
+import { useTabletLayout } from "@/utils/useTabletLayout";
 import { searchPlaces, getTimezoneOffset } from "@/utils/locationSearch";
 import usePrayerStore from "@/store/prayerStore";
 
@@ -59,6 +61,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const updateSettings = usePrayerStore((s) => s.updateSettings);
   const updateLocation = usePrayerStore((s) => s.updateLocation);
+  const { contentStyle } = useTabletLayout();
 
   const [step, setStep] = useState(-1); // -1 = welcome
 
@@ -168,12 +171,15 @@ export default function OnboardingScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View
-        style={{
-          flex: 1,
-          paddingTop: insets.top + 16,
-          paddingBottom: insets.bottom + 24,
-          paddingHorizontal: 28,
-        }}
+        style={[
+          {
+            flex: 1,
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 24,
+            paddingHorizontal: 28,
+          },
+          contentStyle
+        ]}
       >
         {/* Progress bar — hidden on welcome */}
         {step >= 0 && (

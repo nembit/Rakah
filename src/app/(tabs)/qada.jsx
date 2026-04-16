@@ -36,6 +36,7 @@ import {
 import * as Haptics from "expo-haptics";
 import usePrayerStore from "@/store/prayerStore";
 import { formatShortDate } from "@/utils/dateUtils";
+import { useTabletLayout } from "@/utils/useTabletLayout";
 
 const C = {
   bg: "#0F1117",
@@ -674,6 +675,7 @@ function QadaCard({
 
 export default function QadaScreen() {
   const insets = useSafeAreaInsets();
+  const { contentStyle } = useTabletLayout();
   const qdaCounts = usePrayerStore((s) => s.qdaCounts);
   const qdaLog = usePrayerStore((s) => s.qdaLog);
   const adjustQada = usePrayerStore((s) => s.adjustQada);
@@ -706,6 +708,7 @@ export default function QadaScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
         showsVerticalScrollIndicator={false}
       >
+        <View style={contentStyle}>
         {/* Header */}
         <View
           style={{
@@ -987,6 +990,7 @@ export default function QadaScreen() {
             )}
           </Animated.View>
         )}
+        </View>
       </ScrollView>
     </View>
   );

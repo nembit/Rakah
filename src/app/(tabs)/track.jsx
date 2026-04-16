@@ -8,6 +8,7 @@ import {
   Pressable,
   PanResponder,
   Animated as RNAnimated,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
@@ -29,6 +30,8 @@ import {
   toDateString,
   subtractDays,
 } from "@/utils/dateUtils";
+import { calculatePrayerTimes } from "@/utils/prayerTimes";
+import { useTabletLayout } from "@/utils/useTabletLayout";
 
 const C = {
   bg: "#0F1117",
@@ -453,6 +456,7 @@ function DayDetailModal({
 
 export default function TrackScreen() {
   const insets = useSafeAreaInsets();
+  const { contentStyle } = useTabletLayout();
   const prayerLogs = usePrayerStore((s) => s.prayerLogs);
   const exemptLogs = usePrayerStore((s) => s.exemptLogs);
   const setPrayerStatus = usePrayerStore((s) => s.setPrayerStatus);
@@ -497,6 +501,32 @@ export default function TrackScreen() {
   const handleSetStatus = (dateStr, prayer, newStatus) => {
     // Block status changes on exempt days
     if (getExemptDay(dateStr)) return;
+
+    if (dateStr === todayStr) {
+      const { latitude, longitude, timezone } = usePrayerStore.getState().settings.location;
+      const { calcMethod, use24HourTime } = usePrayerStore.getState().settings;
+      try {
+        const t = calculatePrayerTimes(
+          new Date(),
+          latitude,
+          longitude,
+          timezone,
+          calcMethod,
+          !!use24HourTime,
+        );
+        const prayerTime = t[prayer]?.time;
+        if (typeof prayerTime === "number") {
+          const now = new Date();
+          const nowHours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+          if (prayerTime > nowHours) {
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
     const previousStatus = prayerLogs[dateStr]?.[prayer] || "pending";
     setPrayerStatus(dateStr, prayer, newStatus);
 
@@ -557,6 +587,7 @@ export default function TrackScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
         showsVerticalScrollIndicator={false}
       >
+        <View style={contentStyle}>
         {/* Header */}
         <View
           style={{
@@ -829,6 +860,7 @@ export default function TrackScreen() {
             );
           })}
         </Animated.View>
+        </View>
       </ScrollView>
     </View>
   );
